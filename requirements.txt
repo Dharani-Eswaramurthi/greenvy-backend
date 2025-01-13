@@ -9,3 +9,5 @@ secure-smtplib
 pydantic[email]
 python-multipart
 uvicorn
+razorpay
+pycryptodome

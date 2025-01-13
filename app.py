@@ -31,7 +31,7 @@ app = FastAPI()
 
 # CORS setup
 origins = [
-    "http://localhost:3000",
+    "http://localhost:3000", "https://greenvy.store"
 ]
 
 app.add_middleware(
