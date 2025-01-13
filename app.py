@@ -117,7 +117,7 @@ class CheckoutOrder(BaseModel):
     user_id: str
     cart_items: List[dict]
     address_id: int  # Ensure address_id is a required string
-    payment_type: str
+    payment_type: str = None
     total_amount: float
 
 class PaymentSuccess(BaseModel):
