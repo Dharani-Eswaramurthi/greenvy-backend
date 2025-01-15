@@ -701,7 +701,7 @@ async def delete_review(review_id: str):
         raise HTTPException(status_code=500, detail=f"Error deleting review: {str(e)}")
 
 
-@app.post("/seller/fetch-details")
+@app.get("/seller/fetch-details")
 async def fetch_seller_details(seller_id: str):
     """
     Fetch seller details.
