@@ -308,7 +308,7 @@ async def get_seller_profile(seller_id: str):
     return seller_profile
 
 
-@app.get("/seller/fetch-details")
+@app.post("/seller/fetch-details")
 async def fetch_seller_details(seller_id: str):
     """
     Fetch seller details.
