@@ -308,7 +308,7 @@ async def get_seller_profile(seller_id: str):
     return seller_profile
 
 
-@app.post("/seller/fetch-details")
+@app.get("/seller/fetch-details")
 async def fetch_seller_details(seller_id: str):
     """
     Fetch seller details.
@@ -718,22 +718,6 @@ async def delete_review(review_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting review: {str(e)}")
 
-
-@app.get("/seller/fetch-details")
-async def fetch_seller_details(seller_id: str):
-    """
-    Fetch seller details.
-    """
-    try:
-        seller = sellers_collection.find_one({"seller_id": seller_id})
-        if not seller:
-            raise HTTPException(status_code=404, detail="Seller not found. Please check the seller ID.")
-        seller = convert_objectid_to_str(seller)
-        return seller
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while fetching seller details: {str(e)}")
 
 @app.post("/seller/update-seller-rating")
 async def update_seller_rating(seller_id: str):
