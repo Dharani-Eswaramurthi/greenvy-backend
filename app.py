@@ -293,7 +293,7 @@ async def get_seller_profile(seller_id: str):
     """
     Get seller profile by seller ID.
     """
-    seller = users_collection.find_one({"user_id": seller_id, "is_admin": True})
+    seller = sellers_collection.find_one({"seller_id": seller_id})
     if not seller:
         raise HTTPException(status_code=404, detail="Seller not found")
     
