@@ -307,25 +307,18 @@ async def get_seller_profile(seller_id: str):
     }
     return seller_profile
 
-
-@app.post("/seller/fetch-details")
-async def fetch_seller_details(seller_id: str):
+@app.get("/user/cart/{user_id}")
+async def get_cart(user_id: str):
     """
-    Fetch seller details.
+    Get user cart.
     """
-    try:
-        seller = sellers_collection.find_one({"seller_id": seller_id})
-        if not seller:
-            raise HTTPException(status_code=404, detail="Seller not found. Please check the seller ID.")
-        seller = convert_objectid_to_str(seller)
-        return seller
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while fetching seller details: {str(e)}")
+    user = users_collection.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user = convert_objectid_to_str(user)
+    return user.get("cart", [])
 
 
-# User API
 @app.post("/user/register")
 async def register_user(user: User):
     """
@@ -522,6 +515,8 @@ async def get_cart(user_id: str):
     Get user cart.
     """
     user = users_collection.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     user = convert_objectid_to_str(user)
     return user.get("cart", [])
 
