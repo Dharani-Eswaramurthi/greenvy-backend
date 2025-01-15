@@ -619,18 +619,14 @@ async def add_review(review: Review):
     try:
         print(f"Adding review: {review_data}")
         products_collection.update_one({"product_id": review.product_id}, {"$push": {"reviews": review_data}})
-        print(f"Review added to product: {review.product_id}")
-
+        
         # Update the product rating
         product = products_collection.find_one({"product_id": review.product_id})
-        print("Product found: ", product)
-        if product['overall_rating'] == 0:
-            products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": review.rating}})
-            print(f"Product rating set to: {review.rating}")
-        else:
-            new_rating = (product['overall_rating'] + review.rating) / 2
-            products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": new_rating}})
-            print(f"Product rating updated to: {new_rating}")
+        reviews = product.get("reviews", [])
+        total_rating = sum(review.get("rating", 0) for review in reviews)
+        average_rating = total_rating / len(reviews) if len(reviews) > 0 else 0
+        products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": average_rating}})
+        print(f"Updated product rating: {average_rating}")
 
         # Update the seller rating
         seller_id = product.get("seller_id")
@@ -638,7 +634,7 @@ async def add_review(review: Review):
         total_rating = sum(product.get("overall_rating", 0) for product in products)
         average_rating = total_rating / len(products) if len(products) > 0 else 0
         sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating}})
-        print(f"Seller rating updated to: {average_rating}")
+        print(f"Updated seller rating: {average_rating}")
 
     except Exception as e:
         print(f"Error adding review: {str(e)}")
@@ -690,6 +686,24 @@ async def edit_review(review_id: str, review: Review):
     """
     try:
         products_collection.update_one({"reviews.review_id": review_id}, {"$set": {"reviews.$.rating": review.rating, "reviews.$.comment": review.comment}})
+
+        # Update the product rating
+        product = products_collection.find_one({"reviews.review_id": review_id})
+        reviews = product.get("reviews", [])
+        total_rating = sum(review.get("rating", 0) for review in reviews)
+        average_rating = total_rating / len(reviews) if len(reviews) > 0 else 0
+        products_collection.update_one({"product_id": product["product_id"]}, {"$set": {"overall_rating": average_rating}})
+
+        # Update the seller rating
+        seller_id = product.get("seller_id")
+        products = list(products_collection.find({"seller_id": seller_id}))
+        total_rating = sum(product.get("overall_rating", 0) for product in products)
+        average_rating = total_rating / len(products) if len(products) > 0 else 0
+        sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating
+        }})
+        print(f"Seller rating updated to: {average_rating}")
+        print(f"Product rating updated to: {average_rating}")
+
         return {"message": "Review edited successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error editing review: {str(e)}")
@@ -701,6 +715,23 @@ async def delete_review(review_id: str):
     """
     try:
         products_collection.update_one({"reviews.review_id": review_id}, {"$pull": {"reviews": {"review_id": review_id}}})
+
+        # Update the product rating
+        product = products_collection.find_one({"reviews.review_id": review_id})
+        reviews = product.get("reviews", [])
+        total_rating = sum(review.get("rating", 0) for review in reviews)
+        average_rating = total_rating / len(reviews) if len(reviews) > 0 else 0
+        products_collection.update_one({"product_id": product["product_id"]}, {"$set": {"overall_rating": average_rating}})
+
+        # Update the seller rating
+        seller_id = product.get("seller_id")
+        products = list(products_collection.find({"seller_id": seller_id}))
+        total_rating = sum(product.get("overall_rating", 0) for product in products)
+        average_rating = total_rating / len(products) if len(products) > 0 else 0
+        sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating}})
+        print(f"Seller rating updated to: {average_rating}")
+        print(f"Product rating updated to: {average_rating}")
+
         return {"message": "Review deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting review: {str(e)}")
