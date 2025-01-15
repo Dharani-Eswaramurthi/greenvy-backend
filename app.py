@@ -617,26 +617,30 @@ async def add_review(review: Review):
     review_data = review.dict()
     review_data["review_id"] = str(uuid4())
     try:
+        print(f"Adding review: {review_data}")
         products_collection.update_one({"product_id": review.product_id}, {"$push": {"reviews": review_data}})
+        print(f"Review added to product: {review.product_id}")
 
         # Update the product rating
-        product = list(products_collection.find({"product_id": review.product_id}))
-        if product[0]['overall_rating'] == 0:
+        product = products_collection.find_one({"product_id": review.product_id})
+        if product['overall_rating'] == 0:
             products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": review.rating}})
+            print(f"Product rating set to: {review.rating}")
         else:
-            products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": (product['overall_rating'] + review.rating) / 2}})
+            new_rating = (product['overall_rating'] + review.rating) / 2
+            products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": new_rating}})
+            print(f"Product rating updated to: {new_rating}")
 
         # Update the seller rating
-        seller_id = products_collection.find_one({"product_id": review.product_id}).get("seller_id")
+        seller_id = product.get("seller_id")
         products = list(products_collection.find({"seller_id": seller_id}))
-        total_rating = 0
-        for product in products:
-            total_rating += product.get("overall_rating", 0)
+        total_rating = sum(product.get("overall_rating", 0) for product in products)
         average_rating = total_rating / len(products) if len(products) > 0 else 0
         sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating}})
-
+        print(f"Seller rating updated to: {average_rating}")
 
     except Exception as e:
+        print(f"Error adding review: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error adding review: {str(e)}")
     return {"message": "Review added successfully", "review_id": review_data["review_id"]}
 
