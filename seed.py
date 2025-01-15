@@ -14,6 +14,7 @@ db = mongo_client['eco_friendly_ecommerce']
 products_collection = db['products']
 users_collection = db['users']
 orders_collection = db['orders']
+sellers_collection = db['sellers']
 
 # Dummy data
 products_data = [
@@ -24,6 +25,8 @@ products_data = [
         "brand": "Brand A",
         "price": 100.0,
         "images": ["https://via.placeholder.com/150"],
+        "stock": 10,
+        "seller_id": "seller1",
         "product_id": str(uuid4())
     },
     {
@@ -33,6 +36,8 @@ products_data = [
         "brand": "Brand B",
         "price": 50.0,
         "images": ["https://via.placeholder.com/150"],
+        "stock": 20,
+        "seller_id": "seller2",
         "product_id": str(uuid4())
     }
 ]
@@ -58,7 +63,22 @@ users_data = [
         "date_joined": datetime.now().isoformat(),
         "is_admin": True,
         "is_verified": True,
-        "user_id": str(uuid4())
+        "user_id": "seller1"
+    }
+]
+
+sellers_data = [
+    {
+        "seller_id": "seller1",
+        "seller_name": "Admin Seller",
+        "seller_rating": 4.5,
+        "seller_image": "https://via.placeholder.com/150"
+    },
+    {
+        "seller_id": "seller2",
+        "seller_name": "Another Seller",
+        "seller_rating": 4.0,
+        "seller_image": "https://via.placeholder.com/150"
     }
 ]
 
@@ -82,10 +102,12 @@ orders_data = [
 products_collection.delete_many({})
 users_collection.delete_many({})
 orders_collection.delete_many({})
+sellers_collection.delete_many({})
 
 # Insert dummy data into the collections
 products_collection.insert_many(products_data)
 users_collection.insert_many(users_data)
 orders_collection.insert_many(orders_data)
+sellers_collection.insert_many(sellers_data)
 
 print("Dummy data added to the database successfully.")

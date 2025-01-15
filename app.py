@@ -48,6 +48,7 @@ db = mongo_client['eco_friendly_ecommerce']
 users_collection = db['users']
 products_collection = db['products']
 orders_collection = db['orders']
+sellers_collection = db['sellers']
 
 # AWS S3 setup
 s3 = boto3.client('s3', aws_access_key_id=os.getenv('AWS_ACCESS_KEY'), aws_secret_access_key=os.getenv('AWS_SECRET_KEY'))
@@ -71,10 +72,21 @@ razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 class Product(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: str = Field(..., min_length=1, max_length=1000)
+    product_id: str = None
     category: str = Field(..., min_length=1, max_length=50)
     brand: str = Field(..., min_length=1, max_length=50)
     price: float = Field(..., gt=0)
     images: List[str]
+    overall_rating: float = 0.0
+    stock: int = Field(..., ge=0)
+    seller_id: str
+
+class SellerProfile(BaseModel):
+    seller_id: str
+    seller_name: str
+    products: List[Product]
+    seller_rating: float = 0.0
+    seller_image: Optional[str] = None
 
 class User(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
@@ -240,7 +252,8 @@ async def login_admin(login: Login):
 
 @app.post("/admin/add-product")
 async def add_product(name: str = Form(...), description: str = Form(...), category: str = Form(...), 
-                      brand: str = Form(...), price: float = Form(...), images: List[UploadFile] = Form(...)):
+                      brand: str = Form(...), price: float = Form(...), stock: int = Form(...), 
+                      seller_id: str = Form(...), images: List[UploadFile] = Form(...)):
     """
     Add a new product.
     """
@@ -252,6 +265,8 @@ async def add_product(name: str = Form(...), description: str = Form(...), categ
         "category": category,
         "brand": brand,
         "price": price,
+        "stock": stock,
+        "seller_id": seller_id,
         "images": image_urls,
     }
     try:
@@ -272,48 +287,85 @@ async def get_orders(seller_id: str):
         raise HTTPException(status_code=500, detail=f"Error fetching orders: {str(e)}")
     return orders
 
+@app.get("/seller/{seller_id}")
+async def get_seller_profile(seller_id: str):
+    """
+    Get seller profile by seller ID.
+    """
+    seller = users_collection.find_one({"user_id": seller_id, "is_admin": True})
+    if not seller:
+        raise HTTPException(status_code=404, detail="Seller not found")
+    
+    products = list(products_collection.find({"seller_id": seller_id}))
+    products = convert_objectid_to_str(products)
+    
+    seller_profile = {
+        "seller_id": seller_id,
+        "seller_name": seller["username"],
+        "products": products
+    }
+    return seller_profile
+
 # User API
 @app.post("/user/register")
 async def register_user(user: User):
     """
     Register a new user.
     """
-    user_data = user.dict()
-    user_data["user_id"] = str(uuid4())
-    user_data["dateofbirth"] = user_data["dateofbirth"].isoformat()
-    user_data["gender"] = user_data['gender']
-    user_data["password"] = hash_password(decrypt_password(user_data["password"]))
-    user_data["otp"] = random.randint(100000, 999999)
     try:
+        user_data = user.dict()
+        user_data["user_id"] = str(uuid4())
+        user_data["dateofbirth"] = user_data["dateofbirth"].isoformat()
+        user_data["gender"] = user_data['gender']
+        user_data["password"] = hash_password(decrypt_password(user_data["password"]))
+        user_data["otp"] = random.randint(100000, 999999)
         users_collection.insert_one(user_data)
+        send_otp_email(user.email, user_data["otp"])
+        return {"message": "User registered successfully. Please verify your email."}
     except errors.DuplicateKeyError:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    send_otp_email(user.email, user_data["otp"])
-    return {"message": "User registered successfully. Please verify your email."}
+        raise HTTPException(status_code=400, detail="Email already registered. Please use a different email address.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while registering the user: {str(e)}")
 
 @app.post("/user/verify")
 async def verify_user(email: EmailStr, otp: int):
     """
     Verify user email with OTP.
     """
-    user = users_collection.find_one({"email": email, "is_admin": False})
-    if not user or user.get("otp") != otp:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
-    users_collection.update_one({"email": email}, {"$set": {"is_verified": True}, "$unset": {"otp": ""}})
-    return {"message": "Email verified successfully"}
+    try:
+        user = users_collection.find_one({"email": email, "is_admin": False})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
+        if user.get("is_verified"):
+            return {"message": "Email already verified."}
+        if user.get("otp") != otp:
+            raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+        users_collection.update_one({"email": email}, {"$set": {"is_verified": True}, "$unset": {"otp": ""}})
+        return {"message": "Email verified successfully."}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while verifying the email: {str(e)}")
 
 @app.post("/user/login")
 async def login_user(login: Login):
     """
     User login.
     """
-    user = users_collection.find_one({"email": login.email, "is_admin": False})
-    if not user or not verify_password(decrypt_password(login.password), user["password"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not user.get("is_verified"):
-        raise HTTPException(status_code=403, detail="Email not verified")
-    token = create_jwt_token(user_id=user["user_id"], is_admin=False)
-    return {"token": token, "user_id": user["user_id"], "is_admin": False}
+    try:
+        user = users_collection.find_one({"email": login.email, "is_admin": False})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
+        if not verify_password(decrypt_password(login.password), user["password"]):
+            raise HTTPException(status_code=401, detail="Invalid credentials. Please check your password.")
+        if not user.get("is_verified"):
+            raise HTTPException(status_code=403, detail="Email not verified. Please verify your email.")
+        token = create_jwt_token(user_id=user["user_id"], is_admin=False)
+        return {"token": token, "user_id": user["user_id"], "is_admin": False}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while logging in: {str(e)}")
 
 @app.get("/user/profile/{user_id}")
 async def get_user_profile(user_id: str):
@@ -331,22 +383,29 @@ async def upload_profile_image(user_id: str, profile_image: Optional[UploadFile]
     """
     Upload user profile image and return the link.
     """
-    user = users_collection.find_one({"user_id": user_id})
-    if user and user.get("profile_image"):
-        if profile_image:
-            delete_image_from_s3(user["profile_image"])
-            image_url = upload_image_to_s3(profile_image, 'user-profile-images')
-            users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image": image_url, "profile_image_crop": profile_image_crop}})
+    try:
+        user = users_collection.find_one({"user_id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found. Please check the user ID.")
+        if user.get("profile_image"):
+            if profile_image:
+                delete_image_from_s3(user["profile_image"])
+                image_url = upload_image_to_s3(profile_image, 'user-profile-images')
+                users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image": image_url, "profile_image_crop": profile_image_crop}})
+            else:
+                image_url = user["profile_image"]
+                users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image_crop": profile_image_crop}})
         else:
-            image_url = user["profile_image"]
-            users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image_crop": profile_image_crop}})
-    else:
-        if profile_image:
-            image_url = upload_image_to_s3(profile_image, 'user-profile-images')
-            users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image": image_url, "profile_image_crop": profile_image_crop}})
-        else:
-            raise HTTPException(status_code=400, detail="profile_image is required if no existing profile image is found")
-    return {"message": "Profile image uploaded successfully", "profile_image_url": image_url, "profile_image_crop": profile_image_crop}
+            if profile_image:
+                image_url = upload_image_to_s3(profile_image, 'user-profile-images')
+                users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image": image_url, "profile_image_crop": profile_image_crop}})
+            else:
+                raise HTTPException(status_code=400, detail="Profile image is required if no existing profile image is found.")
+        return {"message": "Profile image uploaded successfully.", "profile_image_url": image_url, "profile_image_crop": profile_image_crop}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while uploading the profile image: {str(e)}")
 
 @app.post("/user/delete-profile-image/{user_id}")
 async def delete_profile_image(user_id: str):
@@ -364,13 +423,16 @@ async def update_profile_details(user_id: str, details: UpdateProfileDetails):
     """
     Update user profile details.
     """
-    update_data = {}
-    if details.username:
-        update_data["username"] = details.username
-    if details.email:
-        update_data["email"] = details.email
-    users_collection.update_one({"user_id": user_id}, {"$set": update_data})
-    return {"message": "Profile details updated successfully"}
+    try:
+        update_data = {}
+        if details.username:
+            update_data["username"] = details.username
+        if details.email:
+            update_data["email"] = details.email
+        users_collection.update_one({"user_id": user_id}, {"$set": update_data})
+        return {"message": "Profile details updated successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while updating profile details: {str(e)}")
 
 @app.post("/user/update-profile-details/delete-address/{user_id}")
 async def delete_address(user_id: str, addressId: int):
@@ -406,28 +468,34 @@ async def add_to_cart(user_id: str, product_id: str, quantity: int):
     """
     Add item to cart.
     """
-    cart_item = {
-        "product_id": product_id,
-        "quantity": quantity
-    }
-    # if quantity is 0, then remove the item from the cart
-    if quantity == 0:
-        users_collection.update_one({"user_id": user_id}, {"$pull": {"cart": {"product_id": product_id}}})
-        return {"message": "Item removed from cart"}
-    
-    # check if the product already exists in the user's cart if yes update the quantity else add new item
-    user = users_collection.find_one({"user_id": user_id})
-    if user and "cart" in user:
-        for item in user["cart"]:
-            if item["product_id"] == product_id:
-                users_collection.update_one(
-                    {"user_id": user_id, "cart.product_id": product_id},
-                    {"$set": {"cart.$.quantity": quantity}}
-                )
-                return {"message": "Item quantity updated in cart"}
-             
-    users_collection.update_one({"user_id": user_id}, {"$push": {"cart": cart_item}})
-    return {"message": "Item added to cart"}
+    try:
+        cart_item = {
+            "product_id": product_id,
+            "quantity": quantity
+        }
+        # if quantity is 0, then remove the item from the cart
+        if quantity == 0:
+            users_collection.update_one({"user_id": user_id}, {"$pull": {"cart": {"product_id": product_id}}})
+            return {"message": "Item removed from cart."}
+        
+        # check if the product already exists in the user's cart if yes update the quantity else add new item
+        user = users_collection.find_one({"user_id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found. Please check the user ID.")
+        if "cart" in user:
+            for item in user["cart"]:
+                if item["product_id"] == product_id:
+                    users_collection.update_one(
+                        {"user_id": user_id, "cart.product_id": product_id},
+                        {"$set": {"cart.$.quantity": quantity}}
+                    )
+                    return {"message": "Item quantity updated in cart."}
+        users_collection.update_one({"user_id": user_id}, {"$push": {"cart": cart_item}})
+        return {"message": "Item added to cart."}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while adding item to cart: {str(e)}")
 
 @app.get("/user/cart/{user_id}")
 async def get_cart(user_id: str):
@@ -452,10 +520,10 @@ async def place_order(order: CheckoutOrder):
     """
     Place a new order.
     """
-    order_data = order.dict()
-
-    # Create Razorpay order
     try:
+        order_data = order.dict()
+
+        # Create Razorpay order
         razorpay_order = razorpay_client.order.create({
             "amount": int(order_data["total_amount"] * 100),  # amount in paise
             "currency": "INR",
@@ -466,7 +534,7 @@ async def place_order(order: CheckoutOrder):
         order_data["payment_status"] = "Pending"
         orders_collection.insert_one(order_data)
         return {
-            "message": "Order placed successfully",
+            "message": "Order placed successfully.",
             "order_id": order_data["order_id"],
             "payment_id": razorpay_order["id"],
             "amount": razorpay_order["amount"],
@@ -475,8 +543,10 @@ async def place_order(order: CheckoutOrder):
             "order_status": order_data["order_status"],
             "payment_status": "Pending"
         }
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating Razorpay order: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while placing the order: {str(e)}")
 
 @app.post("/user/payment-success")
 async def payment_success(payment: PaymentSuccess):
@@ -495,8 +565,6 @@ async def payment_success(payment: PaymentSuccess):
         # Fetch payment details from Razorpay
         payment_details = razorpay_client.payment.fetch(payment.payment_id)
 
-        print("PAyment details", payment_details)
-
         # Update the order status and payment type
         orders_collection.update_one(
             {"order_id": payment.order_id},
@@ -507,14 +575,16 @@ async def payment_success(payment: PaymentSuccess):
                 "payment_type": payment_details["method"]
             }}
         )
-        return {"message": "Payment verified and order confirmed"}
+        return {"message": "Payment verified and order confirmed."}
+    except HTTPException as e:
+        raise e
     except Exception as e:
         # Update the order status to failed
         orders_collection.update_one(
             {"order_id": payment.order_id},
             {"$set": {"order_status": "Failed", "payment_status": "Failed"}}
         )
-        raise HTTPException(status_code=500, detail=f"Error verifying payment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while verifying the payment: {str(e)}")
     
 @app.post("/user/payment-failed")
 async def payment_failed(order_id: str):
@@ -574,6 +644,39 @@ async def add_to_wishlist(user_id: str, product_id: str):
             
     users_collection.update_one({"user_id": user_id}, {"$push": {"wishlist": product_id}})
     return {"message": "Item added to wishlist"}
+
+
+@app.post("/seller/fetch-details")
+async def fetch_seller_details(seller_id: str):
+    """
+    Fetch seller details.
+    """
+    seller = sellers_collection.find_one({"seller_id": seller_id})
+    seller = convert_objectid_to_str(seller)
+    return seller
+
+@app.post("/seller/update-seller-rating")
+async def update_seller_rating(seller_id: str):
+    # Fetch all the products of the seller and calculate the average rating
+    products = list(products_collection.find({"seller_id": seller_id}))
+    total_rating = 0
+    for product in products:
+        total_rating += product.get("rating", 0)
+    average_rating = total_rating / len(products) if len(products) > 0 else 0
+    sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating}})
+    return {"message": "Seller rating updated successfully"}
+
+@app.post("/product/update-product-rating")
+async def update_product_rating(product_id: str):
+    # Fetch all the reviews of the product and calculate the average rating
+    reviews = list(products_collection.find({"product_id": product_id}))
+    total_rating = 0
+    for review in reviews:
+        total_rating += review.get("rating", 0)
+    average_rating = total_rating / len(reviews) if len(reviews) > 0 else 0
+    products_collection.update_one({"product_id": product_id}, {"$set": {"rating": average_rating}})
+    return {"message": "Product rating updated successfully"}
+
 
 @app.get("/products/{category}")
 async def get_products(category: str):
