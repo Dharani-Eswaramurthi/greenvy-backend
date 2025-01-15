@@ -674,7 +674,7 @@ async def get_user_reviews(user_id: str):
     reviews = convert_objectid_to_str(reviews)
 
     # retrive only necessary fields like product name, image and review details
-    reviews = [{"product_name": review["name"], "product_image": review["images"][0], "rating": review["reviews"][0]["rating"], "comment": review["reviews"][0]["comment"]} for review in reviews]
+    reviews = [{"product_id": review['product_id'], "product_name": review["name"], "product_image": review["images"][0], "rating": review["reviews"][0]["rating"], "comment": review["reviews"][0]["comment"]} for review in reviews]
 
     return reviews
 
