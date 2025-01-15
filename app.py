@@ -678,6 +678,28 @@ async def get_user_reviews(user_id: str):
 
     return reviews
 
+@app.post("/user/edit-review/{review_id}")
+async def edit_review(review_id: str, review: Review):
+    """
+    Edit a review.
+    """
+    try:
+        products_collection.update_one({"reviews.review_id": review_id}, {"$set": {"reviews.$.rating": review.rating, "reviews.$.comment": review.comment}})
+        return {"message": "Review edited successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error editing review: {str(e)}")
+
+@app.post("/user/delete-review/{review_id}")
+async def delete_review(review_id: str):
+    """
+    Delete a review.
+    """
+    try:
+        products_collection.update_one({"reviews.review_id": review_id}, {"$pull": {"reviews": {"review_id": review_id}}})
+        return {"message": "Review deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting review: {str(e)}")
+
 
 @app.post("/seller/fetch-details")
 async def fetch_seller_details(seller_id: str):
