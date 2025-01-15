@@ -623,6 +623,7 @@ async def add_review(review: Review):
 
         # Update the product rating
         product = products_collection.find_one({"product_id": review.product_id})
+        print("Product found: ", product)
         if product['overall_rating'] == 0:
             products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": review.rating}})
             print(f"Product rating set to: {review.rating}")
