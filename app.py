@@ -307,18 +307,8 @@ async def get_seller_profile(seller_id: str):
     }
     return seller_profile
 
-@app.get("/user/cart/{user_id}")
-async def get_cart(user_id: str):
-    """
-    Get user cart.
-    """
-    user = users_collection.find_one({"user_id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user = convert_objectid_to_str(user)
-    return user.get("cart", [])
 
-
+# User API
 @app.post("/user/register")
 async def register_user(user: User):
     """
@@ -515,8 +505,6 @@ async def get_cart(user_id: str):
     Get user cart.
     """
     user = users_collection.find_one({"user_id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
     user = convert_objectid_to_str(user)
     return user.get("cart", [])
 
