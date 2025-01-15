@@ -299,7 +299,7 @@ async def get_seller_profile(seller_id: str):
 
     seller_products = list(products_collection.find({"seller_id": seller_id}))
 
-    seller['products'] = [{"product_id": product['product_id'], "name": product['name'], "overall_rating": product['overall_rating'], "price": product['price'], "stock": product['stock']} for product in seller_products]
+    seller['products'] = seller_products
     
     return convert_objectid_to_str(seller)
 
