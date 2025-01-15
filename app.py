@@ -298,10 +298,17 @@ async def get_seller_profile(seller_id: str):
         raise HTTPException(status_code=404, detail="Seller not found")
 
     seller_products = list(products_collection.find({"seller_id": seller_id}))
+    seller_products = convert_objectid_to_str(seller_products)
 
-    seller['products'] = seller_products
+    # exclude the key named reviews from the seller_products
+    for product in seller_products:
+        if 'reviews' in product:
+            del product['reviews']
     
-    return convert_objectid_to_str(seller)
+    seller = convert_objectid_to_str(seller)
+    seller['products'] = seller_products
+
+    return seller
 
 
 # User API
