@@ -621,7 +621,7 @@ async def add_review(review: Review):
 
         # Update the product rating
         product = list(products_collection.find({"product_id": review.product_id}))
-        if product['overall_rating'] == 0:
+        if product[0]['overall_rating'] == 0:
             products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": review.rating}})
         else:
             products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": (product['overall_rating'] + review.rating) / 2}})
