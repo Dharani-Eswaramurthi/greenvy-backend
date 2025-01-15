@@ -84,6 +84,7 @@ class Product(BaseModel):
 class SellerProfile(BaseModel):
     seller_id: str
     seller_name: str
+    seller_description: str = None
     products: List[Product]
     seller_rating: float = 0.0
     seller_image: Optional[str] = None
@@ -616,6 +617,25 @@ async def add_review(review: Review):
     review_data["review_id"] = str(uuid4())
     try:
         products_collection.update_one({"product_id": review.product_id}, {"$push": {"reviews": review_data}})
+
+        # Update the product rating
+        reviews = list(products_collection.find({"product_id": review.product_id}))
+        total_rating = 0
+        for review in reviews:
+            total_rating += review.get("rating", 0)
+        average_rating = total_rating / len(reviews) if len(reviews) > 0 else 0
+        products_collection.update_one({"product_id": review.product_id}, {"$set": {"rating": average_rating}})
+
+        # Update the seller rating
+        seller_id = products_collection.find_one({"product_id": review.product_id}).get("seller_id")
+        products = list(products_collection.find({"seller_id": seller_id}))
+        total_rating = 0
+        for product in products:
+            total_rating += product.get("rating", 0)
+        average_rating = total_rating / len(products) if len(products) > 0 else 0
+        sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating}})
+
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error adding review: {str(e)}")
     return {"message": "Review added successfully", "review_id": review_data["review_id"]}
@@ -644,6 +664,15 @@ async def add_to_wishlist(user_id: str, product_id: str):
             
     users_collection.update_one({"user_id": user_id}, {"$push": {"wishlist": product_id}})
     return {"message": "Item added to wishlist"}
+
+@app.get("/user/reviews/{user_id}")
+async def get_user_reviews(user_id: str):
+    """
+    Get reviews by user ID.
+    """
+    reviews = list(products_collection.find({"reviews.user_id": user_id}))
+    reviews = convert_objectid_to_str(reviews)
+    return reviews
 
 
 @app.post("/seller/fetch-details")
