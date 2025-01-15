@@ -296,6 +296,10 @@ async def get_seller_profile(seller_id: str):
     seller = sellers_collection.find_one({"seller_id": seller_id})
     if not seller:
         raise HTTPException(status_code=404, detail="Seller not found")
+
+    seller_products = list(products_collection.find({"seller_id": seller_id}))
+
+    seller['products'] = [{"product_id": product['product_id'], "name": product['name'], "overall_rating": product['overall_rating'], "price": product['price'], "stock": product['stock']} for product in seller_products]
     
     return convert_objectid_to_str(seller)
 
