@@ -107,7 +107,7 @@ class Login(BaseModel):
 
 class Review(BaseModel):
     user_id: str
-    product_id: str
+    product_id: str = None
     rating: int = Field(..., ge=1, le=5)
     comment: Optional[str] = Field(None, max_length=500)
     date_posted: datetime = datetime.now()
