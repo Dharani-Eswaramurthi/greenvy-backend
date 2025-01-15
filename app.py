@@ -673,6 +673,14 @@ async def add_to_wishlist(user_id: str, product_id: str):
     users_collection.update_one({"user_id": user_id}, {"$push": {"wishlist": product_id}})
     return {"message": "Item added to wishlist"}
 
+@app.post("/user/remove-from-wishlist")
+async def remove_from_wishlist(user_id: str, product_id: str):
+    """
+    Remove item from wishlist.
+    """
+    users_collection.update_one({"user_id": user_id}, {"$pull": {"wishlist": product_id}})
+    return {"message": "Item removed from wishlist"}
+
 @app.get("/user/reviews/{user_id}")
 async def get_user_reviews(user_id: str):
     """
