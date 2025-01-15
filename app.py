@@ -623,16 +623,17 @@ async def add_review(review: Review):
         reviews = list(products_collection.find({"product_id": review.product_id}))
         total_rating = 0
         for review in reviews:
-            total_rating += review.get("rating", 0)
-        average_rating = total_rating / len(reviews) if len(reviews) > 0 else 0
-        products_collection.update_one({"product_id": review.product_id}, {"$set": {"rating": average_rating}})
+            for rev in review.get("reviews", []):
+                total_rating += rev.get("rating", 0)
+            average_rating = total_rating / len(review.get("reviews", [])) if len(review.get("reviews", [])) > 0 else 0
+        products_collection.update_one({"product_id": review.product_id}, {"$set": {"overall_rating": average_rating}})
 
         # Update the seller rating
         seller_id = products_collection.find_one({"product_id": review.product_id}).get("seller_id")
         products = list(products_collection.find({"seller_id": seller_id}))
         total_rating = 0
         for product in products:
-            total_rating += product.get("rating", 0)
+            total_rating += product.get("overall_rating", 0)
         average_rating = total_rating / len(products) if len(products) > 0 else 0
         sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating}})
 
