@@ -73,6 +73,7 @@ class Product(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: str = Field(..., min_length=1, max_length=1000)
     product_id: str = None
+    short_note: str = Field(..., min_length=1, max_length=100) # Best Seller, New Arrival, etc.
     category: str = Field(..., min_length=1, max_length=50)
     brand: str = Field(..., min_length=1, max_length=50)
     price: float = Field(..., gt=0)
@@ -104,6 +105,9 @@ class User(BaseModel):
 class Login(BaseModel):
     email: EmailStr
     password: str
+
+class Search(BaseModel):
+    search: str = Field(..., min_length=1)
 
 class Review(BaseModel):
     user_id: str
@@ -672,6 +676,16 @@ async def add_to_wishlist(user_id: str, product_id: str):
             
     users_collection.update_one({"user_id": user_id}, {"$push": {"wishlist": product_id}})
     return {"message": "Item added to wishlist"}
+
+@app.post("/user/products/search")
+async def search_products(search: Search):
+    """
+    Search products by name.
+    """
+    products = list(products_collection.find({"name": {"$regex": search.search, "$options": "i"}}))
+    products = convert_objectid_to_str(products)
+    return products
+
 
 @app.post("/user/remove-from-wishlist")
 async def remove_from_wishlist(user_id: str, product_id: str):
