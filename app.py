@@ -281,19 +281,19 @@ async def register_user(user: User):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while registering the user: {str(e)}")
 
 @app.post("/user/verify")
-async def verify_user(email: EmailStr, otp: int):
+async def verify_user(username: str, email: EmailStr, otp: int):
     """
     Verify user email with OTP.
     """
     try:
-        user = users_collection.find_one({"email": email, "is_admin": False})
+        user = users_collection.find_one({"username": username, "email": email, "is_admin": False})
         if not user:
-            raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
+            raise HTTPException(status_code=404, detail="User not found. Please check the username and email address.")
         if user.get("is_verified"):
             return {"message": "Email already verified."}
         if user.get("otp") != otp:
             raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
-        users_collection.update_one({"email": email}, {"$set": {"is_verified": True}, "$unset": {"otp": ""}})
+        users_collection.update_one({"username": username, "email": email}, {"$set": {"is_verified": True}, "$unset": {"otp": ""}})
         return {"message": "Email verified successfully."}
     except HTTPException as e:
         raise e
