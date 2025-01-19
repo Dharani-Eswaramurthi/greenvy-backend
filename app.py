@@ -882,7 +882,7 @@ async def forgot_password(request: ForgotPasswordRequest):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while requesting password reset: {str(e)}")
 
 @app.post("/user/reset-password")
-async def reset_password(token: str, new_password: str = Form(...)):
+async def reset_password(token: str = Form(...), new_password: str = Form(...)):
     """
     Reset user password.
     """
