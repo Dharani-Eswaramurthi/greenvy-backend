@@ -228,8 +228,7 @@ def send_otp_email(email: str, otp: int):
         
         message.attach(MIMEText(html, 'html'))
         
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
             server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
             server.send_message(message)
     except Exception as e:
