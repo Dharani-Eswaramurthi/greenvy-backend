@@ -893,8 +893,11 @@ async def reset_password(token: str, new_password: str = Form(...)):
         if not user:
             raise HTTPException(status_code=400, detail="Invalid or expired token. Please try again.")
         
-        new_hashed_password = hash_password(new_password)
-        users_collection.update_one({"email": email}, {"$set": {"password": new_hashed_password}, "$unset": {"reset_token": ""}})
+        # Invalidate the token immediately after use
+        users_collection.update_one({"email": email}, {"$unset": {"reset_token": ""}})
+        
+        new_hashed_password = hash_password(decrypt_password(new_password))
+        users_collection.update_one({"email": email}, {"$set": {"password": new_hashed_password}})
         return {"message": "Password reset successfully."}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=400, detail="Token has expired. Please request a new password reset.")
