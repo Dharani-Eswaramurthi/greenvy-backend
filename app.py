@@ -257,118 +257,16 @@ def decrypt_password(encrypted_password: str) -> str:
     decrypted_data = cipher.decrypt(ciphertext)
     return unpad(decrypted_data, 16).decode("utf-8")
 
-# API Endpoints
-
-# Admin API
-@app.post("/admin/register")
-async def register_admin(user: User):
-    """
-    Register a new admin user.
-    """
-    if not user.is_admin:
-        raise HTTPException(status_code=400, detail="Only admins can register through this endpoint")
-    user_data = user.dict()
-    user_data["user_id"] = str(uuid4())
-    user_data["password"] = hash_password(user_data["password"])
-    user_data["otp"] = random.randint(100000, 999999)
-    try:
-        users_collection.insert_one(user_data)
-    except errors.DuplicateKeyError:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    send_otp_email(user.email, user_data["otp"])
-    return {"message": "Admin registered successfully. Please verify your email."}
-
-@app.post("/admin/verify")
-async def verify_admin(email: EmailStr, otp: int):
-    """
-    Verify admin email with OTP.
-    """
-    user = users_collection.find_one({"email": email, "is_admin": True})
-    if not user or user.get("otp") != otp:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
-    users_collection.update_one({"email": email}, {"$set": {"is_verified": True}, "$unset": {"otp": ""}})
-    return {"message": "Email verified successfully"}
-
-@app.post("/admin/login")
-async def login_admin(login: Login):
-    """
-    Admin login.
-    """
-    user = users_collection.find_one({"email": login.email, "is_admin": True})
-    if not user or not verify_password(login.password, user["password"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not user.get("is_verified"):
-        raise HTTPException(status_code=403, detail="Email not verified")
-    token = create_jwt_token(user_id=user["user_id"], is_admin=True)
-    return {"token": token, "user_id": user["user_id"], "is_admin": True}
-
-@app.post("/admin/add-product")
-async def add_product(name: str = Form(...), description: str = Form(...), category: str = Form(...), 
-                      brand: str = Form(...), price: float = Form(...), stock: int = Form(...), 
-                      seller_id: str = Form(...), images: List[UploadFile] = Form(...)):
-    """
-    Add a new product.
-    """
-    image_urls = [upload_image_to_s3(image, 'product-images') for image in images]
-    product = {
-        "product_id": str(uuid4()),
-        "name": name,
-        "description": description,
-        "category": category,
-        "brand": brand,
-        "price": price,
-        "stock": stock,
-        "seller_id": seller_id,
-        "images": image_urls,
-    }
-    try:
-        products_collection.insert_one(product)
-    except errors.DuplicateKeyError:
-        raise HTTPException(status_code=400, detail="Product already exists")
-    return {"message": "Product added successfully", "product_id": product["product_id"]}
-
-@app.get("/admin/orders/{seller_id}")
-async def get_orders(seller_id: str):
-    """
-    Get orders for a seller.
-    """
-    try:
-        orders = list(orders_collection.find({"seller_id": seller_id}))
-        orders = convert_objectid_to_str(orders)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching orders: {str(e)}")
-    return orders
-
-@app.get("/seller/{seller_id}")
-async def get_seller_profile(seller_id: str):
-    """
-    Get seller profile by seller ID.
-    """
-    seller = sellers_collection.find_one({"seller_id": seller_id})
-    if not seller:
-        raise HTTPException(status_code=404, detail="Seller not found")
-
-    seller_products = list(products_collection.find({"seller_id": seller_id}))
-    seller_products = convert_objectid_to_str(seller_products)
-
-    # exclude the key named reviews from the seller_products
-    for product in seller_products:
-        if 'reviews' in product:
-            del product['reviews']
-    
-    seller = convert_objectid_to_str(seller)
-    seller['products'] = seller_products
-
-    return seller
-
-
-# User API
 @app.post("/user/register")
 async def register_user(user: User):
     """
     Register a new user.
     """
     try:
+        # Check if the username is already taken
+        if users_collection.find_one({"username": user.username}):
+            raise HTTPException(status_code=400, detail="Username already taken. Please choose a different username.")
+        
         user_data = user.dict()
         user_data["user_id"] = str(uuid4())
         user_data["dateofbirth"] = user_data["dateofbirth"].isoformat()
