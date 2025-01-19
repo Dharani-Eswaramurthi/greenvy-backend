@@ -142,6 +142,14 @@ class PaymentSuccess(BaseModel):
     payment_id: str
     signature: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: int
+    new_password: str = Field(..., min_length=6)
+
 # Helper Functions
 def upload_image_to_s3(file: UploadFile, folder: str):
     try:
@@ -207,6 +215,61 @@ def send_otp_email(email: str, otp: int):
                         </div>
                         <p style="font-size: 16px; line-height: 1.5;">But hurry, it’s more fleeting than a biodegradable fork—expires in 10 minutes!</p>
                         <p style="font-size: 16px; line-height: 1.5;">Remember, every tiny effort makes a difference. Together, we’ll make this planet greener—one ironic product at a time!</p>
+                        
+                        <div style="margin-top: 20px;">
+                            <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
+                            <p>Email: <a href="mailto:contact@greenvy.store" style="color: #25995C; text-decoration: none;">contact@greenvy.store</a></p>
+                            <p>Phone: <a href="tel:+919655612306" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
+                            <p>Location: Coimbatore, Tamilnadu, India</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Footer with background color -->
+                    <div style="background-color: #25995C; padding: 20px; color: #FFF;">
+                        <p style="font-size: 14px; margin-bottom: 10px;">Questions? We have answers... possibly compostable ones!</p>
+                        <p style="font-size: 14px;">© 2025 greenvy.store. All rights reserved. (Who else would want them?)</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        
+        message.attach(MIMEText(html, 'html'))
+        
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email sending error: {str(e)}")
+
+def send_reset_password_email(email: str, token: str):
+    try:
+        message = MIMEMultipart()
+        message['From'] = EMAIL_ADDRESS
+        message['To'] = email
+        message['Subject'] = 'Your Password Reset Link'
+        
+        # HTML template with enterprise logo and background color
+        reset_link = f"https://greenvy.store/reset-password?token={token}"
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+            <body style="background-color: #F7F9F9; text-align: left; color: #333; font-family: Arial, sans-serif;">
+                <!-- Main container with enhanced shadow -->
+                <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
+                    <!-- Header with background color -->
+                    <div style="background-color: #25995C; padding: 25px; text-align: center;">
+                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
+                    </div>
+                    
+                    <!-- Body content with white background -->
+                    <div style="background-color: #FFFFFF; padding: 30px;">
+                        <p style="font-size: 18px; line-height: 1.6;">Hello greenvy User!</p>
+                        
+                        <p style="font-size: 16px; line-height: 1.5;">We received a request to reset your password. Click the link below to reset it.</p>
+                        <p style="font-size: 16px; line-height: 1.5; text-align: center;"><b><a href="{reset_link}" style="color: #25995C;">Reset Password</a></b></p>
+                        
+                        <p style="font-size: 16px; line-height: 1.5;">This link will expire in 10 minutes.</p>
                         
                         <div style="margin-top: 20px;">
                             <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
@@ -800,6 +863,45 @@ async def get_orders(user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching orders: {str(e)}")
     return orders
+
+@app.post("/user/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """
+    Request password reset.
+    """
+    try:
+        user = users_collection.find_one({"email": request.email, "is_admin": False})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
+        
+        token = jwt.encode({"email": request.email, "exp": datetime.utcnow() + timedelta(minutes=10)}, JWT_SECRET, algorithm='HS256')
+        users_collection.update_one({"email": request.email}, {"$set": {"reset_token": token}})
+        send_reset_password_email(request.email, token)
+        return {"message": "Password reset link sent to your email."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while requesting password reset: {str(e)}")
+
+@app.post("/user/reset-password")
+async def reset_password(token: str, new_password: str = Form(...)):
+    """
+    Reset user password.
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        email = payload.get("email")
+        user = users_collection.find_one({"email": email, "reset_token": token, "is_admin": False})
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid or expired token. Please try again.")
+        
+        new_hashed_password = hash_password(new_password)
+        users_collection.update_one({"email": email}, {"$set": {"password": new_hashed_password}, "$unset": {"reset_token": ""}})
+        return {"message": "Password reset successfully."}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="Token has expired. Please request a new password reset.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=400, detail="Invalid token. Please try again.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while resetting the password: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
