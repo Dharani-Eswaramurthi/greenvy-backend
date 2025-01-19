@@ -179,8 +179,55 @@ def send_otp_email(email: str, otp: int):
         message['From'] = EMAIL_ADDRESS
         message['To'] = email
         message['Subject'] = 'Your OTP Verification Code'
-        body = f"Your OTP code is {otp}. It will expire in 10 minutes."
-        message.attach(MIMEText(body, 'plain'))
+        
+        # HTML template with enterprise logo and background color
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+            <body style="background-color: #F7F9F9; text-align: left; color: #333; font-family: Arial, sans-serif;">
+                <!-- Main container with enhanced shadow -->
+                <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
+                    <!-- Header with background color -->
+                    <div style="background-color: #25995C; padding: 25px; text-align: center;">
+                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
+                    </div>
+                    
+                    <!-- Body content with white background -->
+                    <div style="background-color: #FFFFFF; padding: 30px;">
+                        <p style="font-size: 18px; line-height: 1.6;">Hello greenvy User!</p>
+                        
+                        <p style="font-size: 16px; line-height: 1.5;">Thanks for trusting our planet-friendly services. Who knew saving the world could be so chic?</p>
+                        <p style="font-size: 16px; line-height: 1.5; text-align: center;"><b>Your exclusive OTP for {email}</b></p>
+                        
+                        <!-- Centered OTP in a small container -->
+                        <div style="margin: 20px 0; text-align: center; display: flex; justify-content: center;">
+                            <div style="display: flex; justify-content: center; align-items: center; width: fit-content; height: 50px; padding: 10px 20px; background-color: #CDF0EA; font-size: 22px; font-weight: bold; color: #25995C; letter-spacing: 10px;">
+                                {otp}
+                            </div>
+                        </div>
+                        <p style="font-size: 16px; line-height: 1.5;">But hurry, it’s more fleeting than a biodegradable fork—expires in 10 minutes!</p>
+                        <p style="font-size: 16px; line-height: 1.5;">Remember, every tiny effort makes a difference. Together, we’ll make this planet greener—one ironic product at a time!</p>
+                        
+                        <div style="margin-top: 20px;">
+                            <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
+                            <p>Email: <a href="mailto:contact@greenvy.store" style="color: #25995C; text-decoration: none;">contact@greenvy.store</a></p>
+                            <p>Phone: <a href="tel:+919655612306" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
+                            <p>Location: Coimbatore, Tamilnadu, India</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Footer with background color -->
+                    <div style="background-color: #25995C; padding: 20px; color: #FFF;">
+                        <p style="font-size: 14px; margin-bottom: 10px;">Questions? We have answers... possibly compostable ones!</p>
+                        <p style="font-size: 14px;">© 2025 greenvy.store. All rights reserved. (Who else would want them?)</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        
+        message.attach(MIMEText(html, 'html'))
+        
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
             server.starttls()
             server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
