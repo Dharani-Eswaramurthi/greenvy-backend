@@ -906,6 +906,28 @@ async def reset_password(token: str = Form(...), new_password: str = Form(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while resetting the password: {str(e)}")
 
+
+#create an api to check the token is valid or not
+@app.post("/user/check-token")
+async def check_token(token: str = Form(...)):
+    """
+    Check if the token is valid.
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        email = payload.get("email")
+        user = users_collection.find_one({"email": email, "reset_token": token, "is_admin": False})
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid or expired token. Please try again.")
+        return {"message": "Token is valid."}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="Token has expired. Please request a new password reset.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=400, detail="Invalid token. Please try again.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while checking the token: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
