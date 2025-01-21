@@ -150,6 +150,11 @@ class ResetPasswordRequest(BaseModel):
     otp: int
     new_password: str = Field(..., min_length=6)
 
+class VerifyPaymentOtpRequest(BaseModel):
+    order_id: str
+    otp: int
+
+
 # Helper Functions
 def upload_image_to_s3(file: UploadFile, folder: str):
     try:
@@ -576,6 +581,44 @@ async def place_order(order: CheckoutOrder):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while placing the order: {str(e)}")
+    
+
+@app.post("/user/send-payment-otp")
+async def send_payment_otp(order_id: str):
+    """
+    Send OTP for cash payment verification.
+    """
+    try:
+        order = orders_collection.find_one({"order_id": order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found.")
+        
+        user = users_collection.find_one({"user_id": order["user_id"]})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+        
+        otp = random.randint(100000, 999999)
+        orders_collection.update_one({"order_id": order_id}, {"$set": {"payment_otp": otp}})
+        send_otp_email(user["email"], otp)
+        return {"message": "OTP sent to your email."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while sending the OTP: {str(e)}")
+
+@app.post("/user/verify-payment-otp")
+async def verify_payment_otp(request: VerifyPaymentOtpRequest):
+    """
+    Verify OTP for cash payment.
+    """
+    try:
+        order = orders_collection.find_one({"order_id": request.order_id, "payment_otp": request.otp})
+        if not order:
+            raise HTTPException(status_code=400, detail="Invalid OTP or order ID. Please try again.")
+        
+        orders_collection.update_one({"order_id": request.order_id}, {"$set": {"payment_status": "Success"}, "$unset": {"payment_otp": ""}})
+        return {"message": "Payment OTP verified successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while verifying the OTP: {str(e)}")
+
 
 @app.post("/user/payment-success")
 async def payment_success(payment: PaymentSuccess):
