@@ -134,7 +134,7 @@ class CheckoutOrder(BaseModel):
     user_id: str
     cart_items: List[dict]
     address_id: int  # Ensure address_id is a required string
-    payment_type: str = None
+    mode_of_payment: str = None
     total_amount: float
 
 class PaymentSuccess(BaseModel):
@@ -543,25 +543,34 @@ async def place_order(order: CheckoutOrder):
     try:
         order_data = order.dict()
 
-        # Create Razorpay order
-        razorpay_order = razorpay_client.order.create({
-            "amount": int(order_data["total_amount"] * 100),  # amount in paise
-            "currency": "INR",
-            "payment_capture": "1"
-        })
-        order_data["order_id"] = razorpay_order["id"]
-        order_data["order_status"] = "Order Placed"
-        order_data["payment_status"] = "Pending"
+        if order_data["mode_of_payment"] == "cash":
+            # Create mock order_id and payment_id for cash payments
+            order_data["order_id"] = str(uuid4())
+            order_data["payment_id"] = str(uuid4())
+            order_data["order_status"] = "Order Placed"
+            order_data["payment_status"] = "Pending"
+        else:
+            # Create Razorpay order for online payments
+            razorpay_order = razorpay_client.order.create({
+                "amount": int(order_data["total_amount"] * 100),  # amount in paise
+                "currency": "INR",
+                "payment_capture": "1"
+            })
+            order_data["order_id"] = razorpay_order["id"]
+            order_data["payment_id"] = razorpay_order["id"]
+            order_data["order_status"] = "Order Placed"
+            order_data["payment_status"] = "Pending"
+
         orders_collection.insert_one(order_data)
         return {
             "message": "Order placed successfully.",
             "order_id": order_data["order_id"],
-            "payment_id": razorpay_order["id"],
-            "amount": razorpay_order["amount"],
+            "payment_id": order_data["payment_id"],
+            "amount": order_data["total_amount"] * 100,
             "address_id": order_data["address_id"],
-            "currency": razorpay_order["currency"],
+            "currency": "INR",
             "order_status": order_data["order_status"],
-            "payment_status": "Pending"
+            "payment_status": order_data["payment_status"]
         }
     except HTTPException as e:
         raise e
@@ -574,7 +583,21 @@ async def payment_success(payment: PaymentSuccess):
     Handle payment success callback.
     """
     try:
-        # Verify the payment signature
+        # Check if the payment type is cash
+        order = orders_collection.find_one({"order_id": payment.order_id})
+        if order and order.get("mode_of_payment") == "cash":
+            orders_collection.update_one(
+                {"order_id": payment.order_id},
+                {"$set": {
+                    "order_status": "Order Placed",
+                    "payment_status": "Success",
+                    "payment_id": payment.payment_id,
+                    "mode_of_payment": "cash"
+                }}
+            )
+            return {"message": "Payment verified and order confirmed."}
+        
+        # Verify the payment signature for online payments
         params_dict = {
             'razorpay_order_id': payment.order_id,
             'razorpay_payment_id': payment.payment_id,
@@ -592,7 +615,7 @@ async def payment_success(payment: PaymentSuccess):
                 "order_status": "Order Placed",
                 "payment_status": "Success",
                 "payment_id": payment.payment_id,
-                "payment_type": payment_details["method"]
+                "mode_of_payment": payment_details["method"]
             }}
         )
         return {"message": "Payment verified and order confirmed."}
@@ -605,15 +628,22 @@ async def payment_success(payment: PaymentSuccess):
             {"$set": {"order_status": "Failed", "payment_status": "Failed"}}
         )
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while verifying the payment: {str(e)}")
-    
+
 @app.post("/user/payment-failed")
 async def payment_failed(order_id: str):
     """
     Handle payment failure callback.
     """
-    orders_collection.update_one({"order_id": order_id}, {"$set": {"order_status": "Failed", "payment_status": "Failed"}})
-
-    return {"message": "Order placement failed"}
+    try:
+        order = orders_collection.find_one({"order_id": order_id})
+        if order and order.get("mode_of_payment") == "cash":
+            orders_collection.update_one({"order_id": order_id}, {"$set": {"order_status": "Failed", "payment_status": "Failed"}})
+            return {"message": "Order placement failed"}
+        
+        orders_collection.update_one({"order_id": order_id}, {"$set": {"order_status": "Failed", "payment_status": "Failed"}})
+        return {"message": "Order placement failed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while handling the payment failure: {str(e)}")
     
 @app.post("/user/cancel-order/{order_id}")
 async def cancel_order(order_id: str):
