@@ -129,6 +129,7 @@ class Address(BaseModel):
     state: str
     country: str
     pincode: str
+    phoneNumber: str
 
 class UpdateProfileDetails(BaseModel):
     username: Optional[str] = None
