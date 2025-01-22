@@ -415,7 +415,7 @@ async def login_user(login: Login):
     User login.
     """
     try:
-        user = users_collection.find_one({"phone_number": login.phone_number, "is_admin": False})
+        user = users_collection.find_one({"email": login.email, "is_admin": False})
         if not user:
             raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
         if not verify_password(decrypt_password(login.password), user["password"]):
