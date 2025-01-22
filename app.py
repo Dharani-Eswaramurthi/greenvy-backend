@@ -357,7 +357,7 @@ async def register_user(user: User):
         if users_collection.find_one({"username": user.username}):
             raise HTTPException(status_code=400, detail="Username already taken. Please choose a different username.")
         
-        if users_collection.find_one({"phone_number": user.email}):
+        if users_collection.find_one({"email": user.email}):
             raise HTTPException(status_code=400, detail="Phone number already registered. Please use a different phone number.")
         
         user_data = user.dict()
