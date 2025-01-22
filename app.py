@@ -94,7 +94,8 @@ class SellerProfile(BaseModel):
 
 class User(BaseModel):
     username: str = None
-    email: EmailStr
+    email: EmailStr = None
+    phone_number: int = None
     dateofbirth: datetime
     gender: str
     password: str = Field(..., min_length=6)
@@ -322,9 +323,10 @@ def decrypt_password(encrypted_password: str) -> str:
     return unpad(decrypted_data, 16).decode("utf-8")
 
 
-def send_sms_otp(apikey, numbers, sender, message):
+def send_sms_otp(phone_numner: int, otp: int):
     try:
-        data = urllib.parse.urlencode({'apikey': apikey, 'numbers': numbers, 'message': message, 'sender': sender})
+        sms_message = f"Your OTP for payment verification is {otp}. It will expire in 10 minutes."
+        data = urllib.parse.urlencode({'apikey': os.getenv('TEXTLOCAL_API_KEY') , 'numbers': [phone_numner], 'message': sms_message , 'sender': 'VC-greenvy'})
         data = data.encode('utf-8')
         request = urllib.request.Request("https://api.textlocal.in/send/?")
         f = urllib.request.urlopen(request, data)
@@ -341,12 +343,13 @@ async def register_user(user: User):
     """
 
     # set username in user to extract from email
-    user.username = user.email.split('@')[0]
-
     try:
         # Check if the username is already taken
         if users_collection.find_one({"username": user.username}):
             raise HTTPException(status_code=400, detail="Username already taken. Please choose a different username.")
+        
+        if users_collection.find_one({"phone_number": user.phone_number}):
+            raise HTTPException(status_code=400, detail="Phone number already registered. Please use a different phone number.")
         
         user_data = user.dict()
         user_data["user_id"] = str(uuid4())
@@ -354,29 +357,44 @@ async def register_user(user: User):
         user_data["gender"] = user_data['gender']
         user_data["password"] = hash_password(decrypt_password(user_data["password"]))
         user_data["otp"] = random.randint(100000, 999999)
+        user_data['phone_number'] = user.phone_number
+        # user_data['email'] = user.email
+        # if user_data["email"]:
+        #     send_otp_email(user_data["email"], user_data["otp"])
+        # else:
+        send_sms_otp(user_data['phone_number'], user_data["otp"])
         users_collection.insert_one(user_data)
-        send_otp_email(user.email, user_data["otp"])
-        return {"message": "User registered successfully. Please verify your email."}
+        return {"message": "User registered successfully. Please verify your phone number."}
     except errors.DuplicateKeyError:
         raise HTTPException(status_code=400, detail="Email already registered. Please use a different email address.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while registering the user: {str(e)}")
 
 @app.post("/user/verify")
-async def verify_user(email: EmailStr, otp: int):
+async def verify_user(mail_or_phone: str, otp: int):
     """
     Verify user email with OTP.
     """
     try:
-        user = users_collection.find_one({"email": email, "is_admin": False})
+        # if mail_or_phone.isdigit():
+        user = users_collection.find_one({"phone_number": int(mail_or_phone), "otp": otp})
         if not user:
-            raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
-        if user.get("is_verified"):
-            return {"message": "Email already verified."}
-        if user.get("otp") != otp:
-            raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
-        users_collection.update_one({"email": email}, {"$set": {"is_verified": True}, "$unset": {"otp": ""}})
-        return {"message": "Email verified successfully."}
+            raise HTTPException(status_code=404, detail="User not found. Please check the phone number.")
+        else:
+            if otp != user['otp']:
+                raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+            else:
+                users_collection.update_one({"phone_number": mail_or_phone}, {"$set": {"is_verified": True}})
+        # else:
+        #     user = users_collection.find_one({"email": mail_or_phone, "otp": otp})
+        #     if not user:
+        #         raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
+        #     else:
+        #         if otp != user['otp']:
+        #             raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+        #         else:
+        #             users_collection.update_one({"email": mail_or_phone}, {"$set": {"is_verified": True}})
+
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -629,33 +647,6 @@ async def payment_failed(order_id: str):
     orders_collection.update_one({"order_id": order_id}, {"$set": {"order_status": "Failed", "payment_status": "Failed"}})
 
     return {"message": "Order placement failed"}
-
-
-@app.post('/user/send-sms-otp')
-async def send_sms_otp_api(number: int, user_id: str):
-    """
-    Send OTP to phone number.
-    """
-    try:
-        otp = random.randint(100000, 999999)
-
-        user = users_collection.find_one({"user_id": user_id})
-        if not user["phone_number"]:
-
-            sms_message = f"Your OTP for payment verification is {otp}. It will expire in 10 minutes."
-            send_sms_otp(os.getenv('TEXTLOCAL_API_KEY'), number, 'VC-greenvy', sms_message)
-
-            # Update the user with the new OTP
-            users_collection.update_one({"user_id": user_id}, {"$set": {"otp": otp, "phone_number": number}})
-            
-            return {"message": "OTP sent to your email and phone number."}
-
-        else:
-            return {"message": "Phone number already exists."}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error sending OTP: {str(e)}")
-
 
     
 @app.post("/user/cancel-order/{order_id}")
