@@ -24,6 +24,7 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 import urllib.request
 import urllib.parse
+from twilio.rest import Client
 
 
 # Load environment variables
@@ -323,18 +324,23 @@ def decrypt_password(encrypted_password: str) -> str:
     return unpad(decrypted_data, 16).decode("utf-8")
 
 
-def send_sms_otp(phone_numner: int, otp: int):
+def send_sms_otp(phone_number: int, otp: int):
     try:
-        if os.getenv('TEXTLOCAL_API_KEY') is None:
-            raise HTTPException(status_code=500, detail="TEXTLOCAL_API_KEY environment variable is not set")
-        print("TEXTLOCAL Key", os.getenv('TEXTLOCAL_API_KEY'))
-        sms_message = f"Your OTP for payment verification is {otp}. It will expire in 10 minutes."
-        data = urllib.parse.urlencode({'apikey': os.getenv('TEXTLOCAL_API_KEY') , 'numbers': [phone_numner], 'message': sms_message , 'sender': 'VC-greenvy'})
-        data = data.encode('utf-8')
-        request = urllib.request.Request("https://api.textlocal.in/send/?")
-        f = urllib.request.urlopen(request, data)
-        fr = f.read()
-        return fr
+        account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+        auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+        service_sid = os.getenv('TWILIO_SERVICE_SID')
+        
+        if not account_sid or not auth_token or not service_sid:
+            raise HTTPException(status_code=500, detail="Twilio environment variables are not set")
+        
+        client = Client(account_sid, auth_token)
+        verification = client.verify \
+            .v2 \
+            .services(service_sid) \
+            .verifications \
+            .create(to=phone_number, channel='sms')
+        
+        return verification.sid
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"SMS sending error: {str(e)}")
 
