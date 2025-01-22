@@ -338,7 +338,7 @@ def send_sms_otp(phone_number: int, otp: int):
             .v2 \
             .services(service_sid) \
             .verifications \
-            .create(to=phone_number, channel='sms')
+            .create(to=f'+91{phone_number}', channel='sms')
         
         return verification.sid
     except Exception as e:
