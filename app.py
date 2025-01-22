@@ -357,7 +357,7 @@ async def register_user(user: User):
         if users_collection.find_one({"username": user.username}):
             raise HTTPException(status_code=400, detail="Username already taken. Please choose a different username.")
         
-        if users_collection.find_one({"phone_number": user.phone_number}):
+        if users_collection.find_one({"phone_number": user.email}):
             raise HTTPException(status_code=400, detail="Phone number already registered. Please use a different phone number.")
         
         user_data = user.dict()
@@ -366,14 +366,14 @@ async def register_user(user: User):
         user_data["gender"] = user_data['gender']
         user_data["password"] = hash_password(decrypt_password(user_data["password"]))
         user_data["otp"] = random.randint(100000, 999999)
-        user_data['phone_number'] = user.phone_number
+        user_data['email'] = user.email
         # user_data['email'] = user.email
         # if user_data["email"]:
         #     send_otp_email(user_data["email"], user_data["otp"])
         # else:
-        send_sms_otp(user_data['phone_number'], user_data["otp"])
+        send_otp_email(user_data["email"], user_data["otp"])
         users_collection.insert_one(user_data)
-        return {"message": "User registered successfully. Please verify your phone number."}
+        return {"message": "User registered successfully. Please verify your email."}
     except errors.DuplicateKeyError:
         raise HTTPException(status_code=400, detail="Email already registered. Please use a different email address.")
     except Exception as e:
@@ -386,23 +386,23 @@ async def verify_user(mail_or_phone: str, otp: int):
     """
     try:
         # if mail_or_phone.isdigit():
-        user = users_collection.find_one({"phone_number": int(mail_or_phone), "otp": otp})
+        # user = users_collection.find_one({"phone_number": int(mail_or_phone), "otp": otp})
+        # if not user:
+        #     raise HTTPException(status_code=404, detail="User not found. Please check the phone number.")
+        # else:
+        #     if otp != user['otp']:
+        #         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+        #     else:
+        #         users_collection.update_one({"phone_number": mail_or_phone}, {"$set": {"is_verified": True}})
+        # else:
+        user = users_collection.find_one({"email": mail_or_phone, "otp": otp})
         if not user:
-            raise HTTPException(status_code=404, detail="User not found. Please check the phone number.")
+            raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
         else:
             if otp != user['otp']:
                 raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
             else:
-                users_collection.update_one({"phone_number": mail_or_phone}, {"$set": {"is_verified": True}})
-        # else:
-        #     user = users_collection.find_one({"email": mail_or_phone, "otp": otp})
-        #     if not user:
-        #         raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
-        #     else:
-        #         if otp != user['otp']:
-        #             raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
-        #         else:
-        #             users_collection.update_one({"email": mail_or_phone}, {"$set": {"is_verified": True}})
+                users_collection.update_one({"email": mail_or_phone}, {"$set": {"is_verified": True}})
 
     except HTTPException as e:
         raise e
