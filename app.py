@@ -327,6 +327,7 @@ def send_sms_otp(phone_numner: int, otp: int):
     try:
         if os.getenv('TEXTLOCAL_API_KEY') is None:
             raise HTTPException(status_code=500, detail="TEXTLOCAL_API_KEY environment variable is not set")
+        print("TEXTLOCAL Key", os.getenv('TEXTLOCAL_API_KEY'))
         sms_message = f"Your OTP for payment verification is {otp}. It will expire in 10 minutes."
         data = urllib.parse.urlencode({'apikey': os.getenv('TEXTLOCAL_API_KEY') , 'numbers': [phone_numner], 'message': sms_message , 'sender': 'VC-greenvy'})
         data = data.encode('utf-8')
