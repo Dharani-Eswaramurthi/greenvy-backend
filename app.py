@@ -22,6 +22,8 @@ from base64 import b64decode
 from base64 import b64decode
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
+import urllib.request
+import urllib.parse
 
 
 # Load environment variables
@@ -134,7 +136,7 @@ class CheckoutOrder(BaseModel):
     user_id: str
     cart_items: List[dict]
     address_id: int  # Ensure address_id is a required string
-    mode_of_payment: str = None
+    payment_type: str = None
     total_amount: float
 
 class PaymentSuccess(BaseModel):
@@ -149,11 +151,6 @@ class ResetPasswordRequest(BaseModel):
     email: EmailStr
     otp: int
     new_password: str = Field(..., min_length=6)
-
-class VerifyPaymentOtpRequest(BaseModel):
-    order_id: str
-    otp: int
-
 
 # Helper Functions
 def upload_image_to_s3(file: UploadFile, folder: str):
@@ -323,6 +320,19 @@ def decrypt_password(encrypted_password: str) -> str:
     cipher = AES.new(derived_key, AES.MODE_CBC, iv.encode('utf-8'))
     decrypted_data = cipher.decrypt(ciphertext)
     return unpad(decrypted_data, 16).decode("utf-8")
+
+
+def send_sms_otp(apikey, numbers, sender, message):
+    try:
+        data = urllib.parse.urlencode({'apikey': apikey, 'numbers': numbers, 'message': message, 'sender': sender})
+        data = data.encode('utf-8')
+        request = urllib.request.Request("https://api.textlocal.in/send/?")
+        f = urllib.request.urlopen(request, data)
+        fr = f.read()
+        return fr
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SMS sending error: {str(e)}")
+
 
 @app.post("/user/register")
 async def register_user(user: User):
@@ -548,77 +558,30 @@ async def place_order(order: CheckoutOrder):
     try:
         order_data = order.dict()
 
-        if order_data["mode_of_payment"] == "cash":
-            # Create mock order_id and payment_id for cash payments
-            order_data["order_id"] = str(uuid4())
-            order_data["payment_id"] = str(uuid4())
-            order_data["order_status"] = "Order Placed"
-            order_data["payment_status"] = "Pending"
-        else:
-            # Create Razorpay order for online payments
-            razorpay_order = razorpay_client.order.create({
-                "amount": int(order_data["total_amount"] * 100),  # amount in paise
-                "currency": "INR",
-                "payment_capture": "1"
-            })
-            order_data["order_id"] = razorpay_order["id"]
-            order_data["payment_id"] = razorpay_order["id"]
-            order_data["order_status"] = "Order Placed"
-            order_data["payment_status"] = "Pending"
-
+        # Create Razorpay order
+        razorpay_order = razorpay_client.order.create({
+            "amount": int(order_data["total_amount"] * 100),  # amount in paise
+            "currency": "INR",
+            "payment_capture": "1"
+        })
+        order_data["order_id"] = razorpay_order["id"]
+        order_data["order_status"] = "Order Placed"
+        order_data["payment_status"] = "Pending"
         orders_collection.insert_one(order_data)
         return {
             "message": "Order placed successfully.",
             "order_id": order_data["order_id"],
-            "payment_id": order_data["payment_id"],
-            "amount": order_data["total_amount"] * 100,
+            "payment_id": razorpay_order["id"],
+            "amount": razorpay_order["amount"],
             "address_id": order_data["address_id"],
-            "currency": "INR",
+            "currency": razorpay_order["currency"],
             "order_status": order_data["order_status"],
-            "payment_status": order_data["payment_status"]
+            "payment_status": "Pending"
         }
     except HTTPException as e:
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while placing the order: {str(e)}")
-    
-
-@app.post("/user/send-payment-otp")
-async def send_payment_otp(order_id: str):
-    """
-    Send OTP for cash payment verification.
-    """
-    try:
-        order = orders_collection.find_one({"order_id": order_id})
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found.")
-        
-        user = users_collection.find_one({"user_id": order["user_id"]})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found.")
-        
-        otp = random.randint(100000, 999999)
-        orders_collection.update_one({"order_id": order_id}, {"$set": {"payment_otp": otp}})
-        send_otp_email(user["email"], otp)
-        return {"message": "OTP sent to your email."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while sending the OTP: {str(e)}")
-
-@app.post("/user/verify-payment-otp")
-async def verify_payment_otp(request: VerifyPaymentOtpRequest):
-    """
-    Verify OTP for cash payment.
-    """
-    try:
-        order = orders_collection.find_one({"order_id": request.order_id, "payment_otp": request.otp})
-        if not order:
-            raise HTTPException(status_code=400, detail="Invalid OTP or order ID. Please try again.")
-        
-        orders_collection.update_one({"order_id": request.order_id}, {"$set": {"payment_status": "Success"}, "$unset": {"payment_otp": ""}})
-        return {"message": "Payment OTP verified successfully."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while verifying the OTP: {str(e)}")
-
 
 @app.post("/user/payment-success")
 async def payment_success(payment: PaymentSuccess):
@@ -626,21 +589,7 @@ async def payment_success(payment: PaymentSuccess):
     Handle payment success callback.
     """
     try:
-        # Check if the payment type is cash
-        order = orders_collection.find_one({"order_id": payment.order_id})
-        if order and order.get("mode_of_payment") == "cash":
-            orders_collection.update_one(
-                {"order_id": payment.order_id},
-                {"$set": {
-                    "order_status": "Order Placed",
-                    "payment_status": "Success",
-                    "payment_id": payment.payment_id,
-                    "mode_of_payment": "cash"
-                }}
-            )
-            return {"message": "Payment verified and order confirmed."}
-        
-        # Verify the payment signature for online payments
+        # Verify the payment signature
         params_dict = {
             'razorpay_order_id': payment.order_id,
             'razorpay_payment_id': payment.payment_id,
@@ -658,7 +607,7 @@ async def payment_success(payment: PaymentSuccess):
                 "order_status": "Order Placed",
                 "payment_status": "Success",
                 "payment_id": payment.payment_id,
-                "mode_of_payment": payment_details["method"]
+                "payment_type": payment_details["method"]
             }}
         )
         return {"message": "Payment verified and order confirmed."}
@@ -671,22 +620,43 @@ async def payment_success(payment: PaymentSuccess):
             {"$set": {"order_status": "Failed", "payment_status": "Failed"}}
         )
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while verifying the payment: {str(e)}")
-
+    
 @app.post("/user/payment-failed")
 async def payment_failed(order_id: str):
     """
     Handle payment failure callback.
     """
+    orders_collection.update_one({"order_id": order_id}, {"$set": {"order_status": "Failed", "payment_status": "Failed"}})
+
+    return {"message": "Order placement failed"}
+
+
+@app.post('/user/send-sms-otp')
+async def send_sms_otp_api(number: int, user_id: str):
+    """
+    Send OTP to phone number.
+    """
     try:
-        order = orders_collection.find_one({"order_id": order_id})
-        if order and order.get("mode_of_payment") == "cash":
-            orders_collection.update_one({"order_id": order_id}, {"$set": {"order_status": "Failed", "payment_status": "Failed"}})
-            return {"message": "Order placement failed"}
-        
-        orders_collection.update_one({"order_id": order_id}, {"$set": {"order_status": "Failed", "payment_status": "Failed"}})
-        return {"message": "Order placement failed"}
+        otp = random.randint(100000, 999999)
+
+        user = users_collection.find_one({"user_id": user_id})
+        if not user["phone_number"]:
+
+            sms_message = f"Your OTP for payment verification is {otp}. It will expire in 10 minutes."
+            send_sms_otp(os.getenv('TEXTLOCAL_API_KEY'), number, 'VC-greenvy', sms_message)
+
+            # Update the user with the new OTP
+            users_collection.update_one({"user_id": user_id}, {"$set": {"otp": otp, "phone_number": number}})
+            
+            return {"message": "OTP sent to your email and phone number."}
+
+        else:
+            return {"message": "Phone number already exists."}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while handling the payment failure: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error sending OTP: {str(e)}")
+
+
     
 @app.post("/user/cancel-order/{order_id}")
 async def cancel_order(order_id: str):
