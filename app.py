@@ -96,7 +96,7 @@ class SellerProfile(BaseModel):
 class User(BaseModel):
     username: str = None
     email: EmailStr = None
-    phone_number: Optional[int] = None
+    phone_number: int = None
     dateofbirth: datetime
     gender: str
     password: str = Field(..., min_length=6)
@@ -107,7 +107,7 @@ class User(BaseModel):
     otp: Optional[int] = None
 
 class Login(BaseModel):
-    phone_number: int
+    email: str
     password: str
 
 class Search(BaseModel):
