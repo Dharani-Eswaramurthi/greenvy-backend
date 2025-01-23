@@ -139,6 +139,7 @@ class CheckoutOrder(BaseModel):
     user_id: str
     cart_items: List[dict]
     address_id: int  # Ensure address_id is a required string
+    order_date: datetime = datetime.now()
     payment_type: str = None
     total_amount: float
 
@@ -595,7 +596,9 @@ async def place_order(order: CheckoutOrder):
         print("Razorpay order created: ", razorpay_order)
         order_data["order_id"] = razorpay_order["id"]
         order_data["order_status"] = "Order Placed"
+        order_data["order_date"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         order_data["payment_status"] = "Pending"
+        order_data['payment_id'] = None
         order_data['payment_type'] = order_data['payment_type']
         orders_collection.insert_one(order_data)
         return {
@@ -603,6 +606,8 @@ async def place_order(order: CheckoutOrder):
             "order_id": order_data["order_id"],
             "amount": razorpay_order["amount"],
             "address_id": order_data["address_id"],
+            "payment_type": order_data["payment_type"],
+            "order_date": order_data["order_date"],
             "currency": razorpay_order["currency"],
             "order_status": order_data["order_status"],
             "payment_status": "Pending"
