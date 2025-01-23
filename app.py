@@ -25,6 +25,7 @@ from Crypto.Util.Padding import unpad
 import urllib.request
 import urllib.parse
 from twilio.rest import Client
+import pandas as pd
 
 
 # Load environment variables
@@ -617,6 +618,48 @@ async def place_order(order: CheckoutOrder):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while placing the order: {str(e)}")
+
+@app.post('/user/additional-cost')
+async def additional_cost(order_id: str, address_id: int, total_cost: float):
+    """
+    Add additional cost to an order.
+    """
+    try:
+        # Load the CSV file
+        df = pd.read_csv('places.csv')
+        
+        # Get the user's address by address_id
+        user = users_collection.find_one({"orders.order_id": order_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="Order not found.")
+        
+        address = next((addr for addr in user['address'] if addr['addressId'] == address_id), None)
+        if not address:
+            raise HTTPException(status_code=404, detail="Address not found.")
+        
+        # Get the distance from the CSV file using the pincode
+        pincode = address['pincode']
+        distance_row = df[df['Postal Code'] == int(pincode)]
+        
+        if distance_row.empty:
+            return {"message": "Not deliverable to this pincode."}
+        
+        distance = distance_row['Distance ( in KMS )'].values[0]
+        cap_dist = (total_cost*.1)*.4
+        additional_cost = 0
+        if distance > cap_dist:
+            additional_cost = (distance - cap_dist) * 5
+        
+        # Update the order with the additional cost
+        orders_collection.update_one(
+            {"order_id": order_id},
+            {"$set": {"additional_cost": additional_cost, "total_cost": total_cost + additional_cost}}
+        )
+        
+        return {"message": "Additional cost calculated successfully.", "additional_cost": additional_cost, "total_cost": total_cost + additional_cost}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while calculating the additional cost: {str(e)}")
 
 @app.post("/user/payment-success")
 async def payment_success(payment: PaymentSuccess):
