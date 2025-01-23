@@ -41,6 +41,7 @@ def upload_image_to_s3(file_path, s3_folder):
     except Exception as e:
         print(f"S3 upload error: {str(e)}")
         return None
+    
 
 # Delete all images in the product-images folder
 delete_all_images_in_folder('product-images')
@@ -76,6 +77,7 @@ for product_details in products_details:
         "category": product_details["category"],
         "brand": product_details['brand'],
         "price": product_details["price"],
+        "min_quantity": product_details["min_quantity"],
         "overall_rating": 0,
         "images": product_images,
         "stock": product_details["stock"],
@@ -90,7 +92,11 @@ sellers_data = [
         "seller_name": seller_details["seller_name"],
         "seller_description": seller_details["seller_description"],
         "seller_rating": 0,
-        "seller_image": seller_profile_image
+        "seller_image": seller_profile_image,
+        "products": [
+            {k: v for k, v in product.items() if k != "_id"}
+            for product in products_data if product["seller_id"] == seller_details["seller_id"]
+        ]
     }
 ]
 
@@ -98,7 +104,7 @@ orders_data = []
 
 # Empty the collections
 products_collection.delete_many({})
-users_collection.delete_many({})
+# users_collection.delete_many({})
 orders_collection.delete_many({})
 sellers_collection.delete_many({})
 

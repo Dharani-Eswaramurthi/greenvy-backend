@@ -592,14 +592,15 @@ async def place_order(order: CheckoutOrder):
             "currency": "INR",
             "payment_capture": "1"
         })
+        print("Razorpay order created: ", razorpay_order)
         order_data["order_id"] = razorpay_order["id"]
         order_data["order_status"] = "Order Placed"
         order_data["payment_status"] = "Pending"
+        order_data['payment_type'] = order_data['payment_type']
         orders_collection.insert_one(order_data)
         return {
             "message": "Order placed successfully.",
             "order_id": order_data["order_id"],
-            "payment_id": razorpay_order["id"],
             "amount": razorpay_order["amount"],
             "address_id": order_data["address_id"],
             "currency": razorpay_order["currency"],
