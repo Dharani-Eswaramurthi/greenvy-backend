@@ -1,9 +1,11 @@
 from pymongo import MongoClient
 from uuid import uuid4
 import os
+import json
 from dotenv import load_dotenv
 from datetime import datetime
 import bcrypt
+import boto3
 
 # Load environment variables
 load_dotenv()
@@ -16,367 +18,83 @@ users_collection = db['users']
 orders_collection = db['orders']
 sellers_collection = db['sellers']
 
+# AWS S3 setup
+s3 = boto3.client('s3', aws_access_key_id=os.getenv('AWS_ACCESS_KEY'), aws_secret_access_key=os.getenv('AWS_SECRET_KEY'))
+BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+
+def delete_all_images_in_folder(folder):
+    try:
+        objects_to_delete = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=folder)
+        delete_keys = {'Objects': [{'Key': obj['Key']} for obj in objects_to_delete.get('Contents', [])]}
+        if delete_keys['Objects']:
+            s3.delete_objects(Bucket=BUCKET_NAME, Delete=delete_keys)
+            print(f"Deleted all images in folder: {folder}")
+    except Exception as e:
+        print(f"Error deleting images in folder {folder}: {str(e)}")
+
+def upload_image_to_s3(file_path, s3_folder):
+    try:
+        file_id = str(uuid4())
+        key = f"{s3_folder}/{file_id}_{os.path.basename(file_path)}"
+        s3.upload_file(file_path, BUCKET_NAME, key)
+        return f"https://{BUCKET_NAME}.s3.amazonaws.com/{key}"
+    except Exception as e:
+        print(f"S3 upload error: {str(e)}")
+        return None
+
+# Delete all images in the product-images folder
+delete_all_images_in_folder('product-images')
+
+# Upload seller profile and product images
+seller_folder = "zero-waste-biodegradable"
+
+# Read seller details from JSON file
+with open(os.path.join(seller_folder, 'seller.json'), 'r', encoding='utf-8') as f:
+    seller_details = json.load(f)
+
+seller_profile_image = upload_image_to_s3(f"{seller_folder}/profile.png", f"product-images/{seller_folder}")
+
+# Read product details from JSON file
+with open(os.path.join(seller_folder, 'products.json'), 'r', encoding='utf-8') as f:
+    products_details = json.load(f)
+
+products_data = []
+for product_details in products_details:
+    product_images = []
+    product_path = os.path.join(seller_folder, product_details["folder_name"])
+    
+    for image_file in os.listdir(product_path):
+        image_path = os.path.join(product_path, image_file)
+        if os.path.isfile(image_path):
+            image_url = upload_image_to_s3(image_path, f"product-images/{seller_folder}/{product_details['folder_name']}")
+            if image_url:
+                product_images.append(image_url)
+    
+    products_data.append({
+        "name": product_details["title"],
+        "description": product_details["description"],
+        "category": product_details["category"],
+        "brand": product_details['brand'],
+        "price": product_details["price"],
+        "overall_rating": 0,
+        "images": product_images,
+        "stock": product_details["stock"],
+        "seller_id": product_details['seller_id'],
+        "product_id": str(uuid4())
+    })
+
 # Dummy data
-products_data = [
-    {
-        "name": "Eco-friendly Bamboo Toothbrush",
-        "description": "A toothbrush made from sustainable bamboo with soft bristles.",
-        "category": "featured",
-        "short_note": "Best Seller",
-        "brand": "EcoBrush",
-        "price": 3.99,
-        "overall_rating": 4.7,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 100,
-        "seller_id": "seller1",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Reusable Grocery Bags",
-        "description": "Set of 5 reusable grocery bags made from recycled materials.",
-        "category": "groceries",
-        "short_note": "New Arrival",
-        "brand": "GreenBag",
-        "price": 12.99,
-        "overall_rating": 4.5,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 200,
-        "seller_id": "seller2",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Organic Cotton T-Shirt",
-        "description": "Comfortable t-shirt made from 100% organic cotton.",
-        "category": "eco-friendly",
-        "brand": "EcoWear",
-        "price": 19.99,
-        "overall_rating": 4.8,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 150,
-        "seller_id": "seller1",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Stainless Steel Water Bottle",
-        "description": "Durable and reusable water bottle made from stainless steel.",
-        "category": "eco-friendly",
-        "short_note": "Best Seller",
-        "brand": "HydroLife",
-        "price": 24.99,
-        "overall_rating": 4.9,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 250,
-        "seller_id": "seller2",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Biodegradable Trash Bags",
-        "description": "Eco-friendly trash bags that are fully biodegradable.",
-        "category": "eco-friendly",
-        "brand": "GreenTrash",
-        "price": 8.99,
-        "overall_rating": 4.6,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 300,
-        "seller_id": "seller3",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Solar Powered Charger",
-        "description": "Portable solar charger for your electronic devices.",
-        "category": "eco-friendly",
-        "brand": "SolarTech",
-        "price": 49.99,
-        "overall_rating": 4.7,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 100,
-        "seller_id": "seller4",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Wooden Toy Set",
-        "description": "A set of eco-friendly wooden toys for children.",
-        "category": "toys",
-        "short_note": "New Arrival",
-        "brand": "EcoToys",
-        "price": 29.99,
-        "overall_rating": 4.8,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 150,
-        "seller_id": "seller1",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Organic Cotton Stuffed Animal",
-        "description": "Stuffed animal made from 100% organic cotton.",
-        "category": "toys",
-        "brand": "EcoToys",
-        "price": 14.99,
-        "overall_rating": 4.9,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 200,
-        "seller_id": "seller2",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Eco-friendly Shampoo Bar",
-        "description": "A shampoo bar made from natural ingredients.",
-        "category": "featured",
-        "short_note": "Best Seller",
-        "brand": "EcoHair",
-        "price": 9.99,
-        "overall_rating": 4.7,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 100,
-        "seller_id": "seller1",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Reusable Produce Bags",
-        "description": "Set of 10 reusable produce bags made from organic cotton.",
-        "category": "groceries",
-        "short_note": "New Arrival",
-        "brand": "EcoBag",
-        "price": 15.99,
-        "overall_rating": 4.5,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 200,
-        "seller_id": "seller2",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Eco-friendly Laundry Detergent",
-        "description": "Laundry detergent made from natural ingredients.",
-        "category": "eco-friendly",
-        "brand": "EcoClean",
-        "price": 12.99,
-        "overall_rating": 4.8,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 150,
-        "seller_id": "seller1",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Reusable Coffee Cup",
-        "description": "A reusable coffee cup made from bamboo fiber.",
-        "category": "eco-friendly",
-        "short_note": "Best Seller",
-        "brand": "EcoCup",
-        "price": 14.99,
-        "overall_rating": 4.9,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 250,
-        "seller_id": "seller2",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Compostable Cutlery Set",
-        "description": "A set of compostable cutlery made from cornstarch.",
-        "category": "eco-friendly",
-        "brand": "EcoCutlery",
-        "price": 7.99,
-        "overall_rating": 4.6,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 300,
-        "seller_id": "seller3",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Solar Powered Lantern",
-        "description": "A solar powered lantern for outdoor use.",
-        "category": "eco-friendly",
-        "brand": "SolarLight",
-        "price": 29.99,
-        "overall_rating": 4.7,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 100,
-        "seller_id": "seller4",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Wooden Puzzle Set",
-        "description": "A set of eco-friendly wooden puzzles for children.",
-        "category": "toys",
-        "short_note": "New Arrival",
-        "brand": "EcoPuzzle",
-        "price": 19.99,
-        "overall_rating": 4.8,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 150,
-        "seller_id": "seller1",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Organic Cotton Doll",
-        "description": "A doll made from 100% organic cotton.",
-        "category": "toys",
-        "brand": "EcoDoll",
-        "price": 24.99,
-        "overall_rating": 4.9,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 200,
-        "seller_id": "seller2",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Eco-friendly Dish Soap",
-        "description": "Dish soap made from natural ingredients.",
-        "category": "featured",
-        "short_note": "Best Seller",
-        "brand": "EcoSoap",
-        "price": 5.99,
-        "overall_rating": 4.7,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 100,
-        "seller_id": "seller1",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Reusable Snack Bags",
-        "description": "Set of 5 reusable snack bags made from silicone.",
-        "category": "groceries",
-        "short_note": "New Arrival",
-        "brand": "EcoSnack",
-        "price": 10.99,
-        "overall_rating": 4.5,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 200,
-        "seller_id": "seller2",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Eco-friendly Floor Cleaner",
-        "description": "Floor cleaner made from natural ingredients.",
-        "category": "eco-friendly",
-        "brand": "EcoFloor",
-        "price": 11.99,
-        "overall_rating": 4.8,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 150,
-        "seller_id": "seller1",
-        "product_id": str(uuid4())
-    },
-    {
-        "name": "Reusable Water Bottle",
-        "description": "A reusable water bottle made from stainless steel.",
-        "category": "eco-friendly",
-        "short_note": "Best Seller",
-        "brand": "EcoBottle",
-        "price": 19.99,
-        "overall_rating": 4.9,
-        "images": ["https://via.placeholder.com/150"],
-        "stock": 250,
-        "seller_id": "seller2",
-        "product_id": str(uuid4())
-    }
-]
-
-users_data = [
-    {
-        "username": "john_doe",
-        "email": "john.doe@example.com",
-        "dateofbirth": datetime(1990, 1, 1).isoformat(),
-        "gender": "male",
-        "password": bcrypt.hashpw("password123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
-        "date_joined": datetime.now().isoformat(),
-        "is_admin": False,
-        "is_verified": True,
-        "user_id": str(uuid4())
-    },
-    {
-        "username": "jane_smith",
-        "email": "jane.smith@example.com",
-        "dateofbirth": datetime(1985, 5, 15).isoformat(),
-        "gender": "female",
-        "password": bcrypt.hashpw("securepassword".encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
-        "date_joined": datetime.now().isoformat(),
-        "is_admin": True,
-        "is_verified": True,
-        "user_id": "seller1"
-    },
-    {
-        "username": "alice_jones",
-        "email": "alice.jones@example.com",
-        "dateofbirth": datetime(1992, 3, 22).isoformat(),
-        "gender": "female",
-        "password": bcrypt.hashpw("mypassword".encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
-        "date_joined": datetime.now().isoformat(),
-        "is_admin": False,
-        "is_verified": True,
-        "user_id": str(uuid4())
-    },
-    {
-        "username": "bob_brown",
-        "email": "bob.brown@example.com",
-        "dateofbirth": datetime(1988, 7, 30).isoformat(),
-        "gender": "male",
-        "password": bcrypt.hashpw("password456".encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
-        "date_joined": datetime.now().isoformat(),
-        "is_admin": False,
-        "is_verified": True,
-        "user_id": str(uuid4())
-    }
-]
-
 sellers_data = [
     {
-        "seller_id": "seller1",
-        "seller_name": "EcoMart",
-        "seller_description": "Your one-stop shop for eco-friendly products.",
-        "seller_rating": 4.7,
-        "seller_image": "https://via.placeholder.com/150"
-    },
-    {
-        "seller_id": "seller2",
-        "seller_name": "GreenGoods",
-        "seller_description": "Sustainable and eco-friendly products for everyday use.",
-        "seller_rating": 4.6,
-        "seller_image": "https://via.placeholder.com/150"
-    },
-    {
-        "seller_id": "seller3",
-        "seller_name": "EcoHome",
-        "seller_description": "Eco-friendly home essentials and products.",
-        "seller_rating": 4.5,
-        "seller_image": "https://via.placeholder.com/150"
-    },
-    {
-        "seller_id": "seller4",
-        "seller_name": "SolarStore",
-        "seller_description": "Solar-powered gadgets and accessories.",
-        "seller_rating": 4.8,
-        "seller_image": "https://via.placeholder.com/150"
+        "seller_id": seller_details["seller_id"],
+        "seller_name": seller_details["seller_name"],
+        "seller_description": seller_details["seller_description"],
+        "seller_rating": 0,
+        "seller_image": seller_profile_image
     }
 ]
 
-orders_data = [
-    {
-        "user_id": users_data[0]["user_id"],
-        "cart_items": [
-            {"product_id": products_data[0]["product_id"], "quantity": 2},
-            {"product_id": products_data[1]["product_id"], "quantity": 1}
-        ],
-        "address_id": 1234,
-        "payment_type": "card",
-        "total_amount": 20.97,
-        "order_id": str(uuid4()),
-        "order_status": "Order Placed",
-        "payment_status": "Success"
-    },
-    {
-        "user_id": users_data[2]["user_id"],
-        "cart_items": [
-            {"product_id": products_data[2]["product_id"], "quantity": 3},
-            {"product_id": products_data[3]["product_id"], "quantity": 1}
-        ],
-        "address_id": 5678,
-        "payment_type": "paypal",
-        "total_amount": 84.96,
-        "order_id": str(uuid4()),
-        "order_status": "Order Placed",
-        "payment_status": "Success"
-    }
-]
+orders_data = []
 
 # Empty the collections
 products_collection.delete_many({})
@@ -386,8 +104,6 @@ sellers_collection.delete_many({})
 
 # Insert dummy data into the collections
 products_collection.insert_many(products_data)
-users_collection.insert_many(users_data)
-orders_collection.insert_many(orders_data)
 sellers_collection.insert_many(sellers_data)
 
 print("Dummy data added to the database successfully.")

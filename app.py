@@ -838,6 +838,19 @@ async def update_seller_rating(seller_id: str):
     sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating}})
     return {"message": "Seller rating updated successfully"}
 
+@app.post("/seller/{seller_id}")
+async def get_seller(seller_id: str):
+    """
+    Get seller details by seller ID.
+    """
+    try:
+        seller = sellers_collection.find_one({"seller_id": seller_id})
+        seller = convert_objectid_to_str(seller)
+        return seller
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching seller: {str(e)}")
+
 @app.post("/product/update-product-rating")
 async def update_product_rating(product_id: str):
     # Fetch all the reviews of the product and calculate the average rating

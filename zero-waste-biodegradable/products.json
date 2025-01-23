@@ -1,0 +1,46 @@
+[
+    {
+        "folder_name": "100ml-cups",
+        "title": "Eco-Friendly Disposable 100ml Rice Bran Cups",
+        "description": "<h2>🌿 Crafted with Nature in Mind</h2><p>Experience sustainability at its finest with our 100ml disposable cups, thoughtfully made from <strong>rice bran</strong>, a renewable and biodegradable material.</p><h3>✨ Why Choose These Cups?</h3><ul><li><strong>🌱 Material:</strong> 100% natural rice bran, ensuring eco-friendliness without compromising quality.</li><li><strong>📏 Capacity:</strong> Perfectly sized at <strong>100ml</strong>, ideal for serving your favorite beverages.</li><li><strong>⚖️ Weight:</strong> Lightweight yet durable at just <strong>25 grams</strong>.</li><li><strong>⏳ Duration:</strong> Stays sturdy for <strong>30+ minutes</strong>, giving you ample time to enjoy your drink.</li><li><strong>🔥 Temperature Support:</strong> Expertly insulates hot or cold beverages, maintaining temperatures up to <strong>80°C</strong> or optimal drinking levels.</li></ul><p>🚫 <strong>Note:</strong> Not suitable for water storage. Best for instant serving.</p><h3>🌏 Sustainability in Every Sip</h3><p>Whether you're hosting an event or running a café, these cups are the perfect blend of convenience and care for the planet. Embrace the eco-chic lifestyle while ensuring your beverages are served with style and responsibility.</p>",
+        "price": 2.5,
+        "min_quantity": 25,
+        "stock": 100000,
+        "brand": "Zero Waste Biodegradable",
+        "seller_id": "seller1",
+        "category": "eco-friendly"
+    },
+    {
+        "folder_name": "plates-7inch",
+        "title": "Eco-Friendly Disposable 7-Inch Rice Bran & Rice Husk Plates",
+        "description": "<h2>🌿 Sustainable Dining with Rice Bran & Rice Husk</h2><p>Redefine eco-conscious living with our durable and biodegradable <strong>7-inch disposable plates</strong>, crafted from a harmonious blend of <strong>rice bran and rice husk</strong>.</p><h3>✨ Why Choose These Plates?</h3><ul><li><strong>🌱 Material:</strong> Made from 100% natural rice bran and rice husk, combining strength and sustainability.</li><li><strong>📏 Size:</strong> Compact <strong>7-inch</strong> diameter, ideal for appetizers, desserts, and light servings.</li><li><strong>⚖️ Weight:</strong> Lightweight yet durable at <strong>45 grams</strong>.</li><li><strong>⏳ Duration:</strong> Stays functional for <strong>45+ minutes to 1 hour</strong>, ideal for all types of meals.</li><li><strong>🍽️ Usage:</strong> Perfectly designed to handle <strong>all kinds of foods</strong>, whether hot, cold, or room temperature.</li></ul><h3>🌏 Sustainability in Every Bite</h3><p>Elevate your dining experience with plates that are as stylish as they are sustainable. Compact and eco-friendly, these are perfect for casual and formal dining needs.</p>",
+        "price": 5,
+        "min_quantity": 25,
+        "stock": 50000,
+        "brand": "Zero Waste Biodegradable",
+        "seller_id": "seller1",
+        "category": "eco-friendly"
+    },
+    {
+        "folder_name": "plates-10inch",
+        "title": "Eco-Friendly Disposable 10-Inch Rice Bran & Rice Husk Plates",
+        "description": "<h2>🌿 Sustainable Dining with Rice Bran & Rice Husk</h2><p>Redefine eco-conscious living with our durable and biodegradable <strong>10-inch disposable plates</strong>, crafted from a harmonious blend of <strong>rice bran and rice husk</strong>.</p><h3>✨ Why Choose These Plates?</h3><ul><li><strong>🌱 Material:</strong> Made from 100% natural rice bran and rice husk, combining strength and sustainability.</li><li><strong>📏 Size:</strong> Versatile <strong>10-inch</strong> diameter, perfect for main courses and medium portions.</li><li><strong>⚖️ Weight:</strong> Balanced at <strong>95 grams</strong> for sturdiness and ease of use.</li><li><strong>⏳ Duration:</strong> Stays functional for <strong>45+ minutes to 1 hour</strong>, ideal for all types of meals.</li><li><strong>🍽️ Usage:</strong> Perfectly designed to handle <strong>all kinds of foods</strong>, whether hot, cold, or room temperature.</li></ul><h3>🌏 Sustainability in Every Bite</h3><p>Elevate your dining experience with plates that are as stylish as they are sustainable. These plates are your go-to for eco-friendly dining with a touch of elegance.</p>",
+        "price": 7,
+        "min_quantity": 25,
+        "stock": 30000,
+        "brand": "Zero Waste Biodegradable",
+        "seller_id": "seller1",
+        "category": "eco-friendly"
+    },
+    {
+        "folder_name": "plates-12inch",
+        "title": "Eco-Friendly Disposable 12-Inch Rice Bran & Rice Husk Plates",
+        "description": "<h2>🌿 Sustainable Dining with Rice Bran & Rice Husk</h2><p>Redefine eco-conscious living with our durable and biodegradable <strong>12-inch disposable plates</strong>, crafted from a harmonious blend of <strong>rice bran and rice husk</strong>.</p><h3>✨ Why Choose These Plates?</h3><ul><li><strong>🌱 Material:</strong> Made from 100% natural rice bran and rice husk, combining strength and sustainability.</li><li><strong>📏 Size:</strong> Generous <strong>12-inch</strong> diameter, perfect for serving large portions or sharing platters.</li><li><strong>⚖️ Weight:</strong> Sturdy at <strong>150 grams</strong>, providing reliable support for heavier meals.</li><li><strong>⏳ Duration:</strong> Stays functional for <strong>45+ minutes to 1 hour</strong>, ideal for all types of meals.</li><li><strong>🍽️ Usage:</strong> Perfectly designed to handle <strong>all kinds of foods</strong>, whether hot, cold, or room temperature.</li></ul><h3>🌏 Sustainability in Every Bite</h3><p>Elevate your dining experience with plates that are as stylish as they are sustainable. Spacious and durable, these plates are ideal for events, gatherings, and special occasions.</p>",
+        "price": 10,
+        "min_quantity": 25,
+        "stock": 20000,
+        "brand": "Zero Waste Biodegradable",
+        "seller_id": "seller1",
+        "category": "eco-friendly"
+    }
+]
