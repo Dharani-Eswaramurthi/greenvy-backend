@@ -838,7 +838,7 @@ async def update_seller_rating(seller_id: str):
     sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating}})
     return {"message": "Seller rating updated successfully"}
 
-@app.post("/seller/{seller_id}")
+@app.get("/seller/{seller_id}")
 async def get_seller(seller_id: str):
     """
     Get seller details by seller ID.
