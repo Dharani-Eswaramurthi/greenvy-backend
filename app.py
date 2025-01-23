@@ -620,7 +620,7 @@ async def place_order(order: CheckoutOrder):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while placing the order: {str(e)}")
 
 @app.post('/user/additional-cost')
-async def additional_cost(order_id: str, address_id: int, total_cost: float):
+async def additional_cost(user_id: str, address_id: int, total_cost: float):
     """
     Add additional cost to an order.
     """
@@ -629,9 +629,9 @@ async def additional_cost(order_id: str, address_id: int, total_cost: float):
         df = pd.read_csv('places.csv')
         
         # Get the user's address by address_id
-        user = users_collection.find_one({"orders.order_id": order_id})
+        user = users_collection.find_one({"user_id": user_id})
         if not user:
-            raise HTTPException(status_code=404, detail="Order not found.")
+            raise HTTPException(status_code=404, detail="User not found.")
         
         address = next((addr for addr in user['address'] if addr['addressId'] == address_id), None)
         if not address:
@@ -649,12 +649,7 @@ async def additional_cost(order_id: str, address_id: int, total_cost: float):
         additional_cost = 0
         if distance > cap_dist:
             additional_cost = (distance - cap_dist) * 5
-        
-        # Update the order with the additional cost
-        orders_collection.update_one(
-            {"order_id": order_id},
-            {"$set": {"additional_cost": additional_cost, "total_cost": total_cost + additional_cost}}
-        )
+
         
         return {"message": "Additional cost calculated successfully.", "additional_cost": additional_cost, "total_cost": total_cost + additional_cost}
     
