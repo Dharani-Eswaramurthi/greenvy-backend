@@ -364,6 +364,7 @@ async def register_user(user: User):
         
         user_data = user.dict()
         user_data["user_id"] = str(uuid4())
+        user_data['username'] = user.email.split('@')[0]
         user_data["dateofbirth"] = user_data["dateofbirth"].isoformat()
         user_data["gender"] = user_data['gender']
         user_data["password"] = hash_password(decrypt_password(user_data["password"]))
