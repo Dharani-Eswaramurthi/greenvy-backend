@@ -645,7 +645,7 @@ async def additional_cost(user_id: str, address_id: int, total_cost: float):
             return {"message": "Not deliverable to this pincode."}
         
         distance = distance_row['Distance ( in KMS )'].values[0]
-        cap_dist = (total_cost*.1)*.4
+        cap_dist = (total_cost*.2)*.4
         additional_cost = 0
         if distance > cap_dist:
             additional_cost = (distance - cap_dist) * 5
