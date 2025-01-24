@@ -357,7 +357,7 @@ def send_become_seller_email(name, email, bussiness_name, message):
         
         messsaage = MIMEMultipart()
         message['From'] = EMAIL_ADDRESS
-        message['To'] = "dharani96556@gmail.com"
+        message['To'] = EMAIL_ADDRESS
         message['Subject'] = 'Become a Seller Request'
         # write a notification message to the admin
         admin_html = f"""
