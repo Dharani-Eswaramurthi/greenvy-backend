@@ -360,7 +360,12 @@ def send_become_seller_email(name, email, bussiness_name, message):
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
             server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
             server.send_message(message)
-        
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email sending error: {str(e)}")
+    
+def send_admin_become_seller_email(name, email, bussiness_name, message):
+    try:
         message = MIMEMultipart()
         message['From'] = EMAIL_ADDRESS
         message['To'] = "dharani96556@gmail.com"
@@ -1087,6 +1092,7 @@ async def become_seller(request: BecomeSellerRequest):
     try:
         # send email to admin
         send_become_seller_email(request.name, request.email, request.businessName, request.message)
+        send_admin_become_seller_email(request.name, request.email, request.businessName, request.message)
         return {"message": "Your request has been sent to the admin. You will be notified once your request is approved."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error sending email: {str(e)}")
