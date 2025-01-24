@@ -311,7 +311,7 @@ def send_reset_password_email(email: str, token: str):
         raise HTTPException(status_code=500, detail=f"Email sending error: {str(e)}")
 
 
-def send_become_seller_email(name, email, bussiness_name, message):
+def send_become_seller_email(name, email, bussiness_name, message1):
     try:
         message = MIMEMultipart()
         message['From'] = EMAIL_ADDRESS
@@ -364,7 +364,7 @@ def send_become_seller_email(name, email, bussiness_name, message):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email sending error: {str(e)}")
     
-def send_admin_become_seller_email(name, email, bussiness_name, message):
+def send_admin_become_seller_email(name, email, bussiness_name, message1):
     try:
         message = MIMEMultipart()
         message['From'] = EMAIL_ADDRESS
@@ -390,7 +390,7 @@ def send_admin_become_seller_email(name, email, bussiness_name, message):
                         <p style="font-size: 16px; line-height: 1.5;">Name: {name}</p>
                         <p style="font-size: 16px; line-height: 1.5;">Email: {email}</p>
                         <p style="font-size: 16px; line-height: 1.5;">Bussiness Name: {bussiness_name}</p>
-                        <p style="font-size: 16px; line-height: 1.5;">Message: {message}</p>
+                        <p style="font-size: 16px; line-height: 1.5;">Message: {message1}</p>
                         <p style="font-size: 16px; line-height: 1.5;">Remember, every tiny effort makes a difference. Together, we’ll make this planet greener—one ironic product at a time!</p>
 
                         <div style="margin-top: 20px;">
