@@ -361,7 +361,7 @@ def send_become_seller_email(name, email, bussiness_name, message):
             server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
             server.send_message(message)
         
-        messsaage = MIMEMultipart()
+        message = MIMEMultipart()
         message['From'] = EMAIL_ADDRESS
         message['To'] = "dharani96556@gmail.com"
         message['Subject'] = 'Become a Seller Request'
