@@ -304,6 +304,113 @@ def send_reset_password_email(email: str, token: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email sending error: {str(e)}")
 
+
+def send_become_seller_email(name, email, bussiness_name, message):
+    try:
+        message = MIMEMultipart()
+        message['From'] = EMAIL_ADDRESS
+        message['To'] = email
+        message['Subject'] = 'Become a Seller Request'
+        # write a message saying that your request to becoming a seller will be reviewed and you will be contacted soon
+        endUser_html = f"""
+        <!DOCTYPE html>
+        <html>
+            <body style="background-color: #F7F9F9; text-align: left; color: #333; font-family: Arial, sans-serif;">
+                <!-- Main container with enhanced shadow -->
+                <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
+                    <!-- Header with background color -->
+                    <div style="background-color: #25995C; padding: 25px; text-align: center;">
+                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
+                    </div>
+
+                    <!-- Body content with white background -->
+                    <div style="background-color: #FFFFFF; padding: 30px;">
+                        <p style="font-size: 18px; line-height: 1.6;">Hello {name}!</p>
+                        
+                        <p style="font-size: 16px; line-height: 1.5;">Thanks for your interest in becoming a seller on greenvy.store. We have received your request and will review it shortly.</p>
+                        <p style="font-size: 16px; line-height: 1.5;">We will contact you soon with further details. In the meantime, feel free to explore our planet-friendly products.</p>
+                        <p style="font-size: 16px; line-height: 1.5;">Remember, every tiny effort makes a difference. Together, we’ll make this planet greener—one ironic product at a time!</p>
+
+                        <div style="margin-top: 20px;">
+                            <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
+                            <p>Email: <a href="mailto:contact@greenvy.store" style="color: #25995C; text-decoration: none;">contact@greenvy.store</a></p>
+                            <p>Phone: <a href="tel:+919655612306" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
+                            <p>Location: Coimbatore, Tamilnadu, India</p>
+                        </div>
+                    </div>
+
+                    <!-- Footer with background color -->
+                    <div style="background-color: #25995C; padding: 20px; color: #FFF;">
+                        <p style="font-size: 14px; margin-bottom: 10px;">Questions? We have answers... possibly compostable ones!</p>
+                        <p style="font-size: 14px;">© 2025 greenvy.store. All rights reserved. (Who else would want them?)</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+
+        message.attach(MIMEText(endUser_html, 'html'))
+
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(message)
+        
+        messsaage = MIMEMultipart()
+        message['From'] = email
+        message['To'] = EMAIL_ADDRESS
+        message['Subject'] = 'Become a Seller Request'
+        # write a notification message to the admin
+        admin_html = f"""
+        <!DOCTYPE html>
+        <html>
+            <body style="background-color: #F7F9F9; text-align: left; color: #333; font-family: Arial, sans-serif;">
+                <!-- Main container with enhanced shadow -->
+                <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
+                    <!-- Header with background color -->
+                    <div style="background-color: #25995C; padding: 25px; text-align: center;">
+                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
+                    </div>
+
+                    <!-- Body content with white background -->
+                    <div style="background-color: #FFFFFF; padding: 30px;">
+                        <p style="font-size: 18px; line-height: 1.6;">Hello Admin!</p>
+                        <p style="font-size: 16px; line-height: 1.5;">A new seller request has been received from {name}.</p>
+                        <p style="font-size: 16px; line-height: 1.5;">Here are the details:</p>
+                        <p style="font-size: 16px; line-height: 1.5;">Name: {name}</p>
+                        <p style="font-size: 16px; line-height: 1.5;">Email: {email}</p>
+                        <p style="font-size: 16px; line-height: 1.5;">Bussiness Name: {bussiness_name}</p>
+                        <p style="font-size: 16px; line-height: 1.5;">Message: {message}</p>
+                        <p style="font-size: 16px; line-height: 1.5;">Remember, every tiny effort makes a difference. Together, we’ll make this planet greener—one ironic product at a time!</p>
+
+                        <div style="margin-top: 20px;">
+                            <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
+                            <p>Email: <a href="mailto:XXXXXXXXXXXXXXXXXXXXX" style="color: #25995C; text-decoration: none;">XXXXXXXXXXXXXXXXXXXXX</a></p>
+                            <p>Phone: <a href="tel:0000000000000" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
+                            <p>Location: Coimbatore, Tamilnadu, India</p>
+                        </div>
+                    </div>
+
+                    <!-- Footer with background color -->
+                    <div style="background-color: #25995C; padding: 20px; color: #FFF;">
+                        <p style="font-size: 14px; margin-bottom: 10px;">Questions? We have answers... possibly compostable ones!</p>
+                        <p style="font-size: 14px;">© 2025 greenvy.store. All rights reserved. (Who else would want them?)</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+
+        message.attach(MIMEText(admin_html, 'html'))
+
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(message)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email sending error: {str(e)}")
+    
+
+
 def convert_objectid_to_str(data):
     if isinstance(data, list):
         for item in data:
@@ -965,6 +1072,19 @@ async def get_orders(user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching orders: {str(e)}")
     return orders
+
+@app.post("/become-seller")
+async def become_seller(name, email, bussinessName, message):
+    """
+    Become a seller.
+    """
+    try:
+        # send email to admin
+        send_become_seller_email(name, email, bussinessName, message)
+        return {"message": "Your request has been sent to the admin. You will be notified once your request is approved."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error sending email: {str(e)}")
+
 
 @app.post("/user/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
