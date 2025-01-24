@@ -160,7 +160,7 @@ class ResetPasswordRequest(BaseModel):
 class BecomeSellerRequest(BaseModel):
     name: str
     email: EmailStr
-    bussinessName: str
+    businessName: str
     message: str
 
 # Helper Functions
@@ -1086,7 +1086,7 @@ async def become_seller(request: BecomeSellerRequest):
     """
     try:
         # send email to admin
-        send_become_seller_email(request.name, request.email, request.bussinessName, request.message)
+        send_become_seller_email(request.name, request.email, request.businessName, request.message)
         return {"message": "Your request has been sent to the admin. You will be notified once your request is approved."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error sending email: {str(e)}")
