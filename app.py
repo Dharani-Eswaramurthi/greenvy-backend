@@ -357,7 +357,7 @@ def send_become_seller_email(name, email, bussiness_name, message):
         
         messsaage = MIMEMultipart()
         message['From'] = EMAIL_ADDRESS
-        message['To'] = EMAIL_ADDRESS
+        message['To'] = "dharani96556@gmail.com"
         message['Subject'] = 'Become a Seller Request'
         # write a notification message to the admin
         admin_html = f"""
@@ -384,8 +384,8 @@ def send_become_seller_email(name, email, bussiness_name, message):
 
                         <div style="margin-top: 20px;">
                             <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
-                            <p>Email: <a href="mailto:XXXXXXXXXXXXXXXXXXXXX" style="color: #25995C; text-decoration: none;">XXXXXXXXXXXXXXXXXXXXX</a></p>
-                            <p>Phone: <a href="tel:0000000000000" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
+                            <p>Email: <a href="mailto:contact@greenvy.store" style="color: #25995C; text-decoration: none;">contact@greenvy.store</a></p>
+                            <p>Phone: <a href="tel:+919655612306" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
                             <p>Location: Coimbatore, Tamilnadu, India</p>
                         </div>
                     </div>
