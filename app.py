@@ -157,6 +157,12 @@ class ResetPasswordRequest(BaseModel):
     otp: int
     new_password: str = Field(..., min_length=6)
 
+class BecomeSellerRequest(BaseModel):
+    name: str
+    email: EmailStr
+    bussinessName: str
+    message: str
+
 # Helper Functions
 def upload_image_to_s3(file: UploadFile, folder: str):
     try:
@@ -1074,13 +1080,13 @@ async def get_orders(user_id: str):
     return orders
 
 @app.post("/become-seller")
-async def become_seller(name, email, bussinessName, message):
+async def become_seller(request: BecomeSellerRequest):
     """
     Become a seller.
     """
     try:
         # send email to admin
-        send_become_seller_email(name, email, bussinessName, message)
+        send_become_seller_email(request.name, request.email, request.bussinessName, request.message)
         return {"message": "Your request has been sent to the admin. You will be notified once your request is approved."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error sending email: {str(e)}")
