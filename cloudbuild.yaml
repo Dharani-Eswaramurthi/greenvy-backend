@@ -1,14 +1,12 @@
 steps:
-  # Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/fastapi-app', '.']
+    args: ['build', '-t', 'us-docker.pkg.dev/$PROJECT_ID/fastapi-repo/fastapi-app', '.']
 
-  # Push the image to Artifact Registry / Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/fastapi-app']
+    args: ['push', 'us-docker.pkg.dev/$PROJECT_ID/fastapi-repo/fastapi-app']
 
 images:
-  - 'gcr.io/$PROJECT_ID/fastapi-app'
+  - 'us-docker.pkg.dev/$PROJECT_ID/fastapi-repo/fastapi-app'
 
 options:
-  logging: CLOUD_LOGGING_ONLY   # ✅ Fixes the error you saw
+  logging: CLOUD_LOGGING_ONLY
