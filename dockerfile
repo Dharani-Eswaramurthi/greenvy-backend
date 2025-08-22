@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 
 # Copy app code
-COPY . .
+COPY . . 
 
 # Expose port (Cloud Run expects $PORT)
 ENV PORT=8000
