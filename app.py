@@ -5,7 +5,7 @@ from typing import List, Optional
 from pymongo import MongoClient, errors
 from bson import ObjectId
 from uuid import uuid4
-import boto3
+from google.cloud import storage
 import os
 import bcrypt
 import jwt
@@ -22,10 +22,6 @@ from base64 import b64decode
 from base64 import b64decode
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
-import urllib.request
-import urllib.parse
-from twilio.rest import Client
-import pandas as pd
 
 
 # Load environment variables
@@ -47,16 +43,28 @@ app.add_middleware(
 )
 
 # MongoDB setup
-mongo_client = MongoClient(os.getenv("MONGO_URI", "mongodb+srv://dharani96556:Dharani2002@thegreenvy.a7dsi.mongodb.net/"))
+mongo_client = MongoClient(os.getenv("MONGO_URI"))
 db = mongo_client['eco_friendly_ecommerce']
 users_collection = db['users']
 products_collection = db['products']
 orders_collection = db['orders']
 sellers_collection = db['sellers']
 
-# AWS S3 setup
-s3 = boto3.client('s3', aws_access_key_id=os.getenv('AWS_ACCESS_KEY'), aws_secret_access_key=os.getenv('AWS_SECRET_KEY'))
-BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+# Google Cloud Storage setup
+try:
+    storage_client = storage.Client()
+    BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
+    bucket = storage_client.bucket(BUCKET_NAME)
+    print(f"Successfully connected to GCS bucket: {BUCKET_NAME}")
+except Exception as e:
+    print(f"Warning: Could not initialize Google Cloud Storage: {str(e)}")
+    print("Please ensure you have:")
+    print("1. Set GOOGLE_APPLICATION_CREDENTIALS environment variable to your service account key file")
+    print("2. Or run 'gcloud auth application-default login' if using gcloud CLI")
+    print("3. Set GCS_BUCKET_NAME environment variable")
+    storage_client = None
+    bucket = None
+    BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
 
 # JWT Secret Key
 JWT_SECRET = os.getenv('JWT_SECRET')
@@ -96,8 +104,7 @@ class SellerProfile(BaseModel):
 
 class User(BaseModel):
     username: str = None
-    email: EmailStr = None
-    phone_number: int = None
+    email: EmailStr
     dateofbirth: datetime
     gender: str
     password: str = Field(..., min_length=6)
@@ -108,7 +115,7 @@ class User(BaseModel):
     otp: Optional[int] = None
 
 class Login(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
 class Search(BaseModel):
@@ -130,7 +137,6 @@ class Address(BaseModel):
     state: str
     country: str
     pincode: str
-    phoneNumber: str
 
 class UpdateProfileDetails(BaseModel):
     username: Optional[str] = None
@@ -140,7 +146,6 @@ class CheckoutOrder(BaseModel):
     user_id: str
     cart_items: List[dict]
     address_id: int  # Ensure address_id is a required string
-    order_date: datetime = datetime.now()
     payment_type: str = None
     total_amount: float
 
@@ -157,28 +162,28 @@ class ResetPasswordRequest(BaseModel):
     otp: int
     new_password: str = Field(..., min_length=6)
 
-class BecomeSellerRequest(BaseModel):
-    name: str
-    email: EmailStr
-    businessName: str
-    message: str
-
 # Helper Functions
-def upload_image_to_s3(file: UploadFile, folder: str):
+def upload_image_to_gcs(file: UploadFile, folder: str):
+    if bucket is None:
+        raise HTTPException(status_code=500, detail="Google Cloud Storage not configured")
     try:
         file_id = str(uuid4())
-        key = f"{folder}/{file_id}_{file.filename}"
-        s3.upload_fileobj(file.file, BUCKET_NAME, key)
-        return f"https://{BUCKET_NAME}.s3.amazonaws.com/{key}"
+        blob_name = f"{folder}/{file_id}_{file.filename}"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(file.file)
+        return f"https://storage.googleapis.com/{BUCKET_NAME}/{blob_name}"
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"S3 upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"GCS upload error: {str(e)}")
 
-def delete_image_from_s3(image_url: str):
+def delete_image_from_gcs(image_url: str):
+    if bucket is None:
+        raise HTTPException(status_code=500, detail="Google Cloud Storage not configured")
     try:
-        key = image_url.split(f"https://{BUCKET_NAME}.s3.amazonaws.com/")[1]
-        s3.delete_object(Bucket=BUCKET_NAME, Key=key)
+        blob_name = image_url.split(f"https://storage.googleapis.com/{BUCKET_NAME}/")[1]
+        blob = bucket.blob(blob_name)
+        blob.delete()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"S3 delete error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"GCS delete error: {str(e)}")
 
 def create_jwt_token(user_id: str, is_admin: bool):
     payload = {
@@ -210,7 +215,7 @@ def send_otp_email(email: str, otp: int):
                 <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
                     <!-- Header with background color -->
                     <div style="background-color: #25995C; padding: 25px; text-align: center;">
-                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
+                        <img src="https://storage.googleapis.com/thegreenvy-products/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
                     </div>
                     
                     <!-- Body content with white background -->
@@ -272,7 +277,7 @@ def send_reset_password_email(email: str, token: str):
                 <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
                     <!-- Header with background color -->
                     <div style="background-color: #25995C; padding: 25px; text-align: center;">
-                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
+                        <img src="https://storage.googleapis.com/thegreenvy-products/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
                     </div>
                     
                     <!-- Body content with white background -->
@@ -310,118 +315,6 @@ def send_reset_password_email(email: str, token: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email sending error: {str(e)}")
 
-
-def send_become_seller_email(name, email, bussiness_name, message1):
-    try:
-        message = MIMEMultipart()
-        message['From'] = EMAIL_ADDRESS
-        message['To'] = email
-        message['Subject'] = 'Become a Seller Request'
-        # write a message saying that your request to becoming a seller will be reviewed and you will be contacted soon
-        endUser_html = f"""
-        <!DOCTYPE html>
-        <html>
-            <body style="background-color: #F7F9F9; text-align: left; color: #333; font-family: Arial, sans-serif;">
-                <!-- Main container with enhanced shadow -->
-                <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
-                    <!-- Header with background color -->
-                    <div style="background-color: #25995C; padding: 25px; text-align: center;">
-                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
-                    </div>
-
-                    <!-- Body content with white background -->
-                    <div style="background-color: #FFFFFF; padding: 30px;">
-                        <p style="font-size: 18px; line-height: 1.6;">Hello {name}!</p>
-                        
-                        <p style="font-size: 16px; line-height: 1.5;">Thanks for your interest in becoming a seller on greenvy.store. We have received your request and will review it shortly.</p>
-                        <p style="font-size: 16px; line-height: 1.5;">We will contact you soon with further details. In the meantime, feel free to explore our planet-friendly products.</p>
-                        <p style="font-size: 16px; line-height: 1.5;">Remember, every tiny effort makes a difference. Together, we’ll make this planet greener—one ironic product at a time!</p>
-
-                        <div style="margin-top: 20px;">
-                            <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
-                            <p>Email: <a href="mailto:contact@greenvy.store" style="color: #25995C; text-decoration: none;">contact@greenvy.store</a></p>
-                            <p>Phone: <a href="tel:+919655612306" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
-                            <p>Location: Coimbatore, Tamilnadu, India</p>
-                        </div>
-                    </div>
-
-                    <!-- Footer with background color -->
-                    <div style="background-color: #25995C; padding: 20px; color: #FFF;">
-                        <p style="font-size: 14px; margin-bottom: 10px;">Questions? We have answers... possibly compostable ones!</p>
-                        <p style="font-size: 14px;">© 2025 greenvy.store. All rights reserved. (Who else would want them?)</p>
-                    </div>
-                </div>
-            </body>
-        </html>
-        """
-
-        message.attach(MIMEText(endUser_html, 'html'))
-
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            server.send_message(message)
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Email sending error: {str(e)}")
-    
-def send_admin_become_seller_email(name, email, bussiness_name, message1):
-    try:
-        message = MIMEMultipart()
-        message['From'] = EMAIL_ADDRESS
-        message['To'] = "dharani96556@gmail.com"
-        message['Subject'] = 'Become a Seller Request'
-        # write a notification message to the admin
-        admin_html = f"""
-        <!DOCTYPE html>
-        <html>
-            <body style="background-color: #F7F9F9; text-align: left; color: #333; font-family: Arial, sans-serif;">
-                <!-- Main container with enhanced shadow -->
-                <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
-                    <!-- Header with background color -->
-                    <div style="background-color: #25995C; padding: 25px; text-align: center;">
-                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
-                    </div>
-
-                    <!-- Body content with white background -->
-                    <div style="background-color: #FFFFFF; padding: 30px;">
-                        <p style="font-size: 18px; line-height: 1.6;">Hello Admin!</p>
-                        <p style="font-size: 16px; line-height: 1.5;">A new seller request has been received from {name}.</p>
-                        <p style="font-size: 16px; line-height: 1.5;">Here are the details:</p>
-                        <p style="font-size: 16px; line-height: 1.5;">Name: {name}</p>
-                        <p style="font-size: 16px; line-height: 1.5;">Email: {email}</p>
-                        <p style="font-size: 16px; line-height: 1.5;">Bussiness Name: {bussiness_name}</p>
-                        <p style="font-size: 16px; line-height: 1.5;">Message: {message1}</p>
-                        <p style="font-size: 16px; line-height: 1.5;">Remember, every tiny effort makes a difference. Together, we’ll make this planet greener—one ironic product at a time!</p>
-
-                        <div style="margin-top: 20px;">
-                            <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
-                            <p>Email: <a href="mailto:contact@greenvy.store" style="color: #25995C; text-decoration: none;">contact@greenvy.store</a></p>
-                            <p>Phone: <a href="tel:+919655612306" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
-                            <p>Location: Coimbatore, Tamilnadu, India</p>
-                        </div>
-                    </div>
-
-                    <!-- Footer with background color -->
-                    <div style="background-color: #25995C; padding: 20px; color: #FFF;">
-                        <p style="font-size: 14px; margin-bottom: 10px;">Questions? We have answers... possibly compostable ones!</p>
-                        <p style="font-size: 14px;">© 2025 greenvy.store. All rights reserved. (Who else would want them?)</p>
-                    </div>
-                </div>
-            </body>
-        </html>
-        """
-
-        message.attach(MIMEText(admin_html, 'html'))
-
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            server.send_message(message)
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Email sending error: {str(e)}")
-    
-
-
 def convert_objectid_to_str(data):
     if isinstance(data, list):
         for item in data:
@@ -444,28 +337,6 @@ def decrypt_password(encrypted_password: str) -> str:
     decrypted_data = cipher.decrypt(ciphertext)
     return unpad(decrypted_data, 16).decode("utf-8")
 
-
-def send_sms_otp(phone_number: int, otp: int):
-    try:
-        account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-        auth_token = os.getenv('TWILIO_AUTH_TOKEN')
-        service_sid = os.getenv('TWILIO_SERVICE_SID')
-        
-        if not account_sid or not auth_token or not service_sid:
-            raise HTTPException(status_code=500, detail="Twilio environment variables are not set")
-        
-        client = Client(account_sid, auth_token)
-        verification = client.verify \
-            .v2 \
-            .services(service_sid) \
-            .verifications \
-            .create(to=f'+91{phone_number}', channel='sms')
-        
-        return verification.sid
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"SMS sending error: {str(e)}")
-
-
 @app.post("/user/register")
 async def register_user(user: User):
     """
@@ -473,28 +344,21 @@ async def register_user(user: User):
     """
 
     # set username in user to extract from email
+    user.username = user.email.split('@')[0]
+
     try:
         # Check if the username is already taken
         if users_collection.find_one({"username": user.username}):
             raise HTTPException(status_code=400, detail="Username already taken. Please choose a different username.")
         
-        if users_collection.find_one({"email": user.email}):
-            raise HTTPException(status_code=400, detail="Phone number already registered. Please use a different email.")
-        
         user_data = user.dict()
         user_data["user_id"] = str(uuid4())
-        user_data['username'] = user.email.split('@')[0]
         user_data["dateofbirth"] = user_data["dateofbirth"].isoformat()
         user_data["gender"] = user_data['gender']
         user_data["password"] = hash_password(decrypt_password(user_data["password"]))
         user_data["otp"] = random.randint(100000, 999999)
-        user_data['email'] = user.email
-        # user_data['email'] = user.email
-        # if user_data["email"]:
-        #     send_otp_email(user_data["email"], user_data["otp"])
-        # else:
-        send_otp_email(user_data["email"], user_data["otp"])
         users_collection.insert_one(user_data)
+        send_otp_email(user.email, user_data["otp"])
         return {"message": "User registered successfully. Please verify your email."}
     except errors.DuplicateKeyError:
         raise HTTPException(status_code=400, detail="Email already registered. Please use a different email address.")
@@ -502,30 +366,20 @@ async def register_user(user: User):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while registering the user: {str(e)}")
 
 @app.post("/user/verify")
-async def verify_user(mail_or_phone: str, otp: int):
+async def verify_user(email: EmailStr, otp: int):
     """
     Verify user email with OTP.
     """
     try:
-        # if mail_or_phone.isdigit():
-        # user = users_collection.find_one({"phone_number": int(mail_or_phone), "otp": otp})
-        # if not user:
-        #     raise HTTPException(status_code=404, detail="User not found. Please check the phone number.")
-        # else:
-        #     if otp != user['otp']:
-        #         raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
-        #     else:
-        #         users_collection.update_one({"phone_number": mail_or_phone}, {"$set": {"is_verified": True}})
-        # else:
-        user = users_collection.find_one({"email": mail_or_phone, "otp": otp})
+        user = users_collection.find_one({"email": email, "is_admin": False})
         if not user:
             raise HTTPException(status_code=404, detail="User not found. Please check the email address.")
-        else:
-            if otp != user['otp']:
-                raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
-            else:
-                users_collection.update_one({"email": mail_or_phone}, {"$set": {"is_verified": True}})
-
+        if user.get("is_verified"):
+            return {"message": "Email already verified."}
+        if user.get("otp") != otp:
+            raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+        users_collection.update_one({"email": email}, {"$set": {"is_verified": True}, "$unset": {"otp": ""}})
+        return {"message": "Email verified successfully."}
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -573,15 +427,15 @@ async def upload_profile_image(user_id: str, profile_image: Optional[UploadFile]
             raise HTTPException(status_code=404, detail="User not found. Please check the user ID.")
         if user.get("profile_image"):
             if profile_image:
-                delete_image_from_s3(user["profile_image"])
-                image_url = upload_image_to_s3(profile_image, 'user-profile-images')
+                delete_image_from_gcs(user["profile_image"])
+                image_url = upload_image_to_gcs(profile_image, 'user-profile-images')
                 users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image": image_url, "profile_image_crop": profile_image_crop}})
             else:
                 image_url = user["profile_image"]
                 users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image_crop": profile_image_crop}})
         else:
             if profile_image:
-                image_url = upload_image_to_s3(profile_image, 'user-profile-images')
+                image_url = upload_image_to_gcs(profile_image, 'user-profile-images')
                 users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image": image_url, "profile_image_crop": profile_image_crop}})
             else:
                 raise HTTPException(status_code=400, detail="Profile image is required if no existing profile image is found.")
@@ -598,7 +452,7 @@ async def delete_profile_image(user_id: str):
     """
     user = users_collection.find_one({"user_id": user_id})
     if user and user.get("profile_image"):
-        delete_image_from_s3(user["profile_image"])
+        delete_image_from_gcs(user["profile_image"])
         users_collection.update_one({"user_id": user_id}, {"$unset": {"profile_image": ""}})
     return {"message": "Profile image deleted successfully"}
 
@@ -713,21 +567,16 @@ async def place_order(order: CheckoutOrder):
             "currency": "INR",
             "payment_capture": "1"
         })
-        print("Razorpay order created: ", razorpay_order)
         order_data["order_id"] = razorpay_order["id"]
         order_data["order_status"] = "Order Placed"
-        order_data["order_date"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         order_data["payment_status"] = "Pending"
-        order_data['payment_id'] = None
-        order_data['payment_type'] = order_data['payment_type']
         orders_collection.insert_one(order_data)
         return {
             "message": "Order placed successfully.",
             "order_id": order_data["order_id"],
+            "payment_id": razorpay_order["id"],
             "amount": razorpay_order["amount"],
             "address_id": order_data["address_id"],
-            "payment_type": order_data["payment_type"],
-            "order_date": order_data["order_date"],
             "currency": razorpay_order["currency"],
             "order_status": order_data["order_status"],
             "payment_status": "Pending"
@@ -736,43 +585,6 @@ async def place_order(order: CheckoutOrder):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while placing the order: {str(e)}")
-
-@app.post('/user/additional-cost')
-async def additional_cost(user_id: str, address_id: int, total_cost: float):
-    """
-    Add additional cost to an order.
-    """
-    try:
-        # Load the CSV file
-        df = pd.read_csv('places.csv')
-        
-        # Get the user's address by address_id
-        user = users_collection.find_one({"user_id": user_id})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found.")
-        
-        address = next((addr for addr in user['address'] if addr['addressId'] == address_id), None)
-        if not address:
-            raise HTTPException(status_code=404, detail="Address not found.")
-        
-        # Get the distance from the CSV file using the pincode
-        pincode = address['pincode']
-        distance_row = df[df['Postal Code'] == int(pincode)]
-        
-        if distance_row.empty:
-            return {"message": "Not deliverable to this pincode."}
-        
-        distance = distance_row['Distance ( in KMS )'].values[0]
-        cap_dist = (total_cost*.15)*.4
-        additional_cost = 0
-        if distance > cap_dist:
-            additional_cost = (distance - cap_dist) * 5
-
-        
-        return {"message": "Additional cost calculated successfully.", "additional_cost": additional_cost, "total_cost": total_cost + additional_cost}
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while calculating the additional cost: {str(e)}")
 
 @app.post("/user/payment-success")
 async def payment_success(payment: PaymentSuccess):
@@ -820,7 +632,6 @@ async def payment_failed(order_id: str):
     orders_collection.update_one({"order_id": order_id}, {"$set": {"order_status": "Failed", "payment_status": "Failed"}})
 
     return {"message": "Order placement failed"}
-
     
 @app.post("/user/cancel-order/{order_id}")
 async def cancel_order(order_id: str):
@@ -1001,19 +812,6 @@ async def update_seller_rating(seller_id: str):
     sellers_collection.update_one({"seller_id": seller_id}, {"$set": {"seller_rating": average_rating}})
     return {"message": "Seller rating updated successfully"}
 
-@app.get("/seller/{seller_id}")
-async def get_seller(seller_id: str):
-    """
-    Get seller details by seller ID.
-    """
-    try:
-        seller = sellers_collection.find_one({"seller_id": seller_id})
-        seller = convert_objectid_to_str(seller)
-        return seller
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching seller: {str(e)}")
-
 @app.post("/product/update-product-rating")
 async def update_product_rating(product_id: str):
     # Fetch all the reviews of the product and calculate the average rating
@@ -1083,20 +881,6 @@ async def get_orders(user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching orders: {str(e)}")
     return orders
-
-@app.post("/become-seller")
-async def become_seller(request: BecomeSellerRequest):
-    """
-    Become a seller.
-    """
-    try:
-        # send email to admin
-        send_become_seller_email(request.name, request.email, request.businessName, request.message)
-        send_admin_become_seller_email(request.name, request.email, request.businessName, request.message)
-        return {"message": "Your request has been sent to the admin. You will be notified once your request is approved."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error sending email: {str(e)}")
-
 
 @app.post("/user/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):

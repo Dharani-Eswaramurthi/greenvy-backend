@@ -95,6 +95,7 @@ celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
+able-folio-400909-fd594ade5766.json
 
 # Environments
 .env

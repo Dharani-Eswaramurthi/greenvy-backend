@@ -5,41 +5,67 @@ import json
 from dotenv import load_dotenv
 from datetime import datetime
 import bcrypt
-import boto3
+from google.cloud import storage
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+from google.auth import default
 
 # Load environment variables
 load_dotenv()
 
 # MongoDB setup
-mongo_client = MongoClient(os.getenv("MONGO_URI", "mongodb+srv://dharani96556:Dharani2002@thegreenvy.a7dsi.mongodb.net/"))
+mongo_client = MongoClient("mongodb+srv://dharani96556:sPyNc7QdRnmcExi5@thegreenvy-db.iuywaii.mongodb.net/")
 db = mongo_client['eco_friendly_ecommerce']
 products_collection = db['products']
 users_collection = db['users']
 orders_collection = db['orders']
 sellers_collection = db['sellers']
 
-# AWS S3 setup
-s3 = boto3.client('s3', aws_access_key_id=os.getenv('AWS_ACCESS_KEY'), aws_secret_access_key=os.getenv('AWS_SECRET_KEY'))
-BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+# Google Cloud Storage setup
+BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
+
+# Try to initialize GCS client with proper error handling
+try:
+    # Try to use default credentials first
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(BUCKET_NAME)
+    print(f"Successfully connected to GCS bucket: {BUCKET_NAME}")
+except Exception as e:
+    print(f"Warning: Could not initialize Google Cloud Storage with default credentials: {str(e)}")
+    print("Please ensure you have:")
+    print("1. Set GOOGLE_APPLICATION_CREDENTIALS environment variable to your service account key file")
+    print("2. Or run 'gcloud auth application-default login' if using gcloud CLI")
+    print("3. Set GCS_BUCKET_NAME environment variable")
+    
+    # Set dummy functions for testing without GCS
+    storage_client = None
+    bucket = None
 
 def delete_all_images_in_folder(folder):
+    if bucket is None:
+        print(f"Skipping delete operation - GCS not available")
+        return
     try:
-        objects_to_delete = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=folder)
-        delete_keys = {'Objects': [{'Key': obj['Key']} for obj in objects_to_delete.get('Contents', [])]}
-        if delete_keys['Objects']:
-            s3.delete_objects(Bucket=BUCKET_NAME, Delete=delete_keys)
-            print(f"Deleted all images in folder: {folder}")
+        blobs = bucket.list_blobs(prefix=folder)
+        for blob in blobs:
+            blob.delete()
+        print(f"Deleted all images in folder: {folder}")
     except Exception as e:
         print(f"Error deleting images in folder {folder}: {str(e)}")
 
-def upload_image_to_s3(file_path, s3_folder):
+def upload_image_to_gcs(file_path, gcs_folder):
+    if bucket is None:
+        print(f"Skipping upload for {file_path} - GCS not available")
+        return f"dummy_url_for_{os.path.basename(file_path)}"
     try:
         file_id = str(uuid4())
-        key = f"{s3_folder}/{file_id}_{os.path.basename(file_path)}"
-        s3.upload_file(file_path, BUCKET_NAME, key)
-        return f"https://{BUCKET_NAME}.s3.amazonaws.com/{key}"
+        blob_name = f"{gcs_folder}/{file_id}_{os.path.basename(file_path)}"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_filename(file_path)
+        print(f"Uploaded {file_path} to GCS bucket: {BUCKET_NAME}")
+        return f"https://storage.googleapis.com/{BUCKET_NAME}/{blob_name}"
     except Exception as e:
-        print(f"S3 upload error: {str(e)}")
+        print(f"GCS upload error: {str(e)}")
         return None
     
 
@@ -53,7 +79,7 @@ seller_folder = "zero-waste-biodegradable"
 with open(os.path.join(seller_folder, 'seller.json'), 'r', encoding='utf-8') as f:
     seller_details = json.load(f)
 
-seller_profile_image = upload_image_to_s3(f"{seller_folder}/profile.png", f"product-images/{seller_folder}")
+seller_profile_image = upload_image_to_gcs(f"{seller_folder}/profile.png", f"product-images/{seller_folder}")
 
 # Read product details from JSON file
 with open(os.path.join(seller_folder, 'products.json'), 'r', encoding='utf-8') as f:
@@ -67,7 +93,7 @@ for product_details in products_details:
     for image_file in os.listdir(product_path):
         image_path = os.path.join(product_path, image_file)
         if os.path.isfile(image_path):
-            image_url = upload_image_to_s3(image_path, f"product-images/{seller_folder}/{product_details['folder_name']}")
+            image_url = upload_image_to_gcs(image_path, f"product-images/{seller_folder}/{product_details['folder_name']}")
             if image_url:
                 product_images.append(image_url)
     

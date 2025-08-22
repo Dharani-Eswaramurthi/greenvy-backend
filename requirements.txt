@@ -1,7 +1,7 @@
 fastapi
 pydantic
 pymongo
-boto3
+google-cloud-storage
 bcrypt
 pyjwt
 python-dotenv
