@@ -5,7 +5,7 @@ from typing import List, Optional
 from pymongo import MongoClient, errors
 from bson import ObjectId
 from uuid import uuid4
-import boto3
+from google.cloud import storage
 import os
 import bcrypt
 import jwt
@@ -50,9 +50,10 @@ products_collection = db['products']
 orders_collection = db['orders']
 sellers_collection = db['sellers']
 
-# AWS S3 setup
-s3 = boto3.client('s3', aws_access_key_id=os.getenv('AWS_ACCESS_KEY'), aws_secret_access_key=os.getenv('AWS_SECRET_KEY'))
-BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+# Google Cloud Storage setup
+storage_client = storage.Client()
+BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
+bucket = storage_client.bucket(BUCKET_NAME)
 
 # JWT Secret Key
 JWT_SECRET = os.getenv('JWT_SECRET')
@@ -151,21 +152,23 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=6)
 
 # Helper Functions
-def upload_image_to_s3(file: UploadFile, folder: str):
+def upload_image_to_gcs(file: UploadFile, folder: str):
     try:
         file_id = str(uuid4())
         key = f"{folder}/{file_id}_{file.filename}"
-        s3.upload_fileobj(file.file, BUCKET_NAME, key)
-        return f"https://{BUCKET_NAME}.s3.amazonaws.com/{key}"
+        blob = bucket.blob(key)
+        blob.upload_from_file(file.file)
+        return f"https://storage.googleapis.com/{BUCKET_NAME}/{key}"
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"S3 upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"GCS upload error: {str(e)}")
 
-def delete_image_from_s3(image_url: str):
+def delete_image_from_gcs(image_url: str):
     try:
-        key = image_url.split(f"https://{BUCKET_NAME}.s3.amazonaws.com/")[1]
-        s3.delete_object(Bucket=BUCKET_NAME, Key=key)
+        key = image_url.split(f"https://storage.googleapis.com/{BUCKET_NAME}/")[1]
+        blob = bucket.blob(key)
+        blob.delete()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"S3 delete error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"GCS delete error: {str(e)}")
 
 def create_jwt_token(user_id: str, is_admin: bool):
     payload = {
@@ -197,7 +200,7 @@ def send_otp_email(email: str, otp: int):
                 <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
                     <!-- Header with background color -->
                     <div style="background-color: #25995C; padding: 25px; text-align: center;">
-                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
+                        <img src="https://storage.googleapis.com/thegreenvy-products/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
                     </div>
                     
                     <!-- Body content with white background -->
@@ -259,7 +262,7 @@ def send_reset_password_email(email: str, token: str):
                 <div style="max-width: 600px; margin: 20px auto; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); border-radius: 10px; overflow: hidden;">
                     <!-- Header with background color -->
                     <div style="background-color: #25995C; padding: 25px; text-align: center;">
-                        <img src="https://thegreenvy-products.s3.ap-south-1.amazonaws.com/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
+                        <img src="https://storage.googleapis.com/thegreenvy-products/greenvy-logo.png" alt="Greenvy Logo" style="width: 120px; height: auto;">
                     </div>
                     
                     <!-- Body content with white background -->
@@ -409,15 +412,15 @@ async def upload_profile_image(user_id: str, profile_image: Optional[UploadFile]
             raise HTTPException(status_code=404, detail="User not found. Please check the user ID.")
         if user.get("profile_image"):
             if profile_image:
-                delete_image_from_s3(user["profile_image"])
-                image_url = upload_image_to_s3(profile_image, 'user-profile-images')
+                delete_image_from_gcs(user["profile_image"])
+                image_url = upload_image_to_gcs(profile_image, 'user-profile-images')
                 users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image": image_url, "profile_image_crop": profile_image_crop}})
             else:
                 image_url = user["profile_image"]
                 users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image_crop": profile_image_crop}})
         else:
             if profile_image:
-                image_url = upload_image_to_s3(profile_image, 'user-profile-images')
+                image_url = upload_image_to_gcs(profile_image, 'user-profile-images')
                 users_collection.update_one({"user_id": user_id}, {"$set": {"profile_image": image_url, "profile_image_crop": profile_image_crop}})
             else:
                 raise HTTPException(status_code=400, detail="Profile image is required if no existing profile image is found.")
@@ -434,7 +437,7 @@ async def delete_profile_image(user_id: str):
     """
     user = users_collection.find_one({"user_id": user_id})
     if user and user.get("profile_image"):
-        delete_image_from_s3(user["profile_image"])
+        delete_image_from_gcs(user["profile_image"])
         users_collection.update_one({"user_id": user_id}, {"$unset": {"profile_image": ""}})
     return {"message": "Profile image deleted successfully"}
 
