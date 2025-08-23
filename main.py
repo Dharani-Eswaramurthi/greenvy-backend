@@ -27,7 +27,18 @@ from Crypto.Util.Padding import unpad
 # Load environment variables
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None)
+
+@app.get("/")
+async def root():
+    """
+    Root endpoint to verify the API is running successfully.
+    """
+    return {
+        "message": "Greenvy API is running successfully!",
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat()
+    }
 
 # CORS setup
 origins = [

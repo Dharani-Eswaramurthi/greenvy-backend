@@ -63,7 +63,8 @@ def upload_image_to_gcs(file_path, gcs_folder):
         blob = bucket.blob(blob_name)
         blob.upload_from_filename(file_path)
         print(f"Uploaded {file_path} to GCS bucket: {BUCKET_NAME}")
-        return f"https://storage.googleapis.com/{BUCKET_NAME}/{blob_name}"
+        # Return URL that uses our proxy endpoint instead of direct GCS URL
+        return f"/images/{blob_name}"
     except Exception as e:
         print(f"GCS upload error: {str(e)}")
         return None
