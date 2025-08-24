@@ -232,7 +232,7 @@ def send_otp_email(email: str, otp: int):
                         
                         <div style="margin-top: 20px;">
                             <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
-                            <p>Email: <a href="mailto:contact@greenvy.store" style="color: #25995C; text-decoration: none;">contact@greenvy.store</a></p>
+                            <p>Email: <a href="mailto:hello@greenvy.store" style="color: #25995C; text-decoration: none;">hello@greenvy.store</a></p>
                             <p>Phone: <a href="tel:+919655612306" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
                             <p>Location: Coimbatore, Tamilnadu, India</p>
                         </div>
@@ -287,7 +287,7 @@ def send_reset_password_email(email: str, token: str):
                         
                         <div style="margin-top: 20px;">
                             <p style="margin-bottom: 5px; font-size: 14px;">Got questions or just feeling chatty?</p>
-                            <p>Email: <a href="mailto:contact@greenvy.store" style="color: #25995C; text-decoration: none;">contact@greenvy.store</a></p>
+                            <p>Email: <a href="mailto:hello@greenvy.store" style="color: #25995C; text-decoration: none;">hello@greenvy.store</a></p>
                             <p>Phone: <a href="tel:+919655612306" style="color: #25995C; text-decoration: none;">+91 96556-12306</a></p>
                             <p>Location: Coimbatore, Tamilnadu, India</p>
                         </div>
@@ -341,11 +341,14 @@ async def register_user(user: User):
 
     # set username in user to extract from email
     user.username = user.email.split('@')[0]
+    print("Username splitted")
 
     try:
+        print("Entered try")
         # Check if the username is already taken
         if users_collection.find_one({"username": user.username}):
             raise HTTPException(status_code=400, detail="Username already taken. Please choose a different username.")
+
         
         user_data = user.dict()
         user_data["user_id"] = str(uuid4())
@@ -353,6 +356,7 @@ async def register_user(user: User):
         user_data["gender"] = user_data['gender']
         user_data["password"] = hash_password(decrypt_password(user_data["password"]))
         user_data["otp"] = random.randint(100000, 999999)
+        print("User data created")
         users_collection.insert_one(user_data)
         send_otp_email(user.email, user_data["otp"])
         return {"message": "User registered successfully. Please verify your email."}
